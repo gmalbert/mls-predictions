@@ -563,10 +563,10 @@ with tab2:
     )
 
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-    show_all = col_f1.button("📊 All", use_container_width=True)
-    show_low = col_f2.button("🟢 Low Risk", use_container_width=True)
-    show_mod = col_f3.button("🟡 Moderate", use_container_width=True)
-    show_high = col_f4.button("🔴 High/Critical", use_container_width=True)
+    show_all = col_f1.button("📊 All", width="stretch")
+    show_low = col_f2.button("🟢 Low Risk", width="stretch")
+    show_mod = col_f3.button("🟡 Moderate", width="stretch")
+    show_high = col_f4.button("🔴 High/Critical", width="stretch")
 
     if show_low:
         filtered = display_df[display_df["Risk Score"] <= 30]
@@ -926,7 +926,7 @@ with tab5:
         st.dataframe(
             df_display,
             height=get_dataframe_height(df_display),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
