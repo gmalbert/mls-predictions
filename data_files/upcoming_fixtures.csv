@@ -1,0 +1,90 @@
+Date,Time,HomeTeam,AwayTeam,HomeConference,AwayConference,CrossConference,HomeSurface,AwayTravelMiles,IsLongHaul,Venue,ESPN_ID
+2026-04-25,01:00 PM,Toronto FC,Atlanta United,Eastern,Eastern,No,Grass,733.1,No,BMO Field,761570
+2026-04-25,02:30 PM,CF Montréal,New York City FC,Eastern,Eastern,No,Grass,327.7,No,Stade Saputo,761583
+2026-04-25,04:45 PM,Minnesota United,LAFC,Western,Western,No,Grass,1528.8,Yes,Allianz Field,761571
+2026-04-25,07:30 PM,Columbus Crew,Philadelphia Union,Eastern,Eastern,No,Grass,404.8,No,ScottsMiracle-Gro Field,761573
+2026-04-25,07:30 PM,D.C. United,Orlando City,Eastern,Eastern,No,Grass,756.3,No,Audi Field,761572
+2026-04-25,07:30 PM,FC Cincinnati,Red Bull New York,Eastern,Unknown,Yes,Turf,0.0,No,TQL Stadium,761575
+2026-04-25,07:30 PM,Inter Miami CF,New England Revolution,Eastern,Eastern,No,Grass,1225.7,No,Nu Stadium,761574
+2026-04-26,08:30 PM,Austin FC,Houston Dynamo,Western,Western,No,Grass,148.2,No,Q2 Stadium,761578
+2026-04-26,08:30 PM,Chicago Fire,Sporting Kansas City,Eastern,Western,Yes,Grass,423.2,No,Soldier Field,761577
+2026-04-26,08:30 PM,Nashville SC,Charlotte FC,Eastern,Eastern,No,Grass,338.0,No,GEODIS Park,761579
+2026-04-26,08:30 PM,St. Louis City SC,San Jose Earthquakes,Western,Western,No,Grass,1721.6,Yes,Energizer Park,761576
+2026-04-26,09:30 PM,San Diego FC,Portland Timbers,Unknown,Western,No,Grass,0.0,No,Snapdragon Stadium,761580
+2026-04-26,10:30 PM,Seattle Sounders,FC Dallas,Western,Western,No,Turf,1650.0,Yes,Lumen Field,761581
+2026-04-26,10:30 PM,Vancouver Whitecaps,Colorado Rapids,Western,Western,No,Turf,1105.8,No,BC Place,761582
+2026-04-26,07:00 PM,LA Galaxy,Real Salt Lake,Western,Western,No,Grass,581.2,No,Dignity Health Sports Park,761584
+2026-05-02,01:00 PM,Toronto FC,San Jose Earthquakes,Eastern,Western,Yes,Grass,2250.0,Yes,BMO Field,761597
+2026-05-02,02:30 PM,Sporting Kansas City,Seattle Sounders,Western,Western,No,Grass,1490.7,No,Children's Mercy Park,761585
+2026-05-02,04:30 PM,Real Salt Lake,Portland Timbers,Western,Western,No,Grass,642.4,No,America First Field,761586
+2026-05-02,07:00 PM,Inter Miami CF,Orlando City,Eastern,Eastern,No,Grass,192.0,No,Nu Stadium,761587
+2026-05-02,07:30 PM,Atlanta United,CF Montréal,Eastern,Eastern,No,Grass,997.2,No,Mercedes-Benz Stadium,761590
+2026-05-02,07:30 PM,Columbus Crew,Minnesota United,Eastern,Western,Yes,Grass,620.8,No,ScottsMiracle-Gro Field,761589
+2026-05-02,07:30 PM,New England Revolution,Charlotte FC,Eastern,Eastern,No,Turf,701.0,No,Gillette Stadium,761591
+2026-05-02,07:30 PM,Philadelphia Union,Nashville SC,Eastern,Eastern,No,Grass,670.4,No,Subaru Park,761588
+2026-05-02,07:30 PM,Red Bull New York,FC Dallas,Unknown,Western,No,Grass,0.0,No,Red Bull Arena,761592
+2026-05-03,08:30 PM,Chicago Fire,FC Cincinnati,Eastern,Eastern,No,Grass,250.0,No,Soldier Field,761593
+2026-05-03,08:30 PM,Houston Dynamo,Colorado Rapids,Western,Western,No,Grass,879.5,No,Shell Energy Stadium,761594
+2026-05-03,09:30 PM,San Diego FC,LAFC,Unknown,Western,No,Grass,0.0,No,Snapdragon Stadium,761595
+2026-05-03,10:30 PM,LA Galaxy,Vancouver Whitecaps,Western,Western,No,Grass,1093.5,No,Dignity Health Sports Park,761596
+2026-05-03,03:00 PM,New York City FC,D.C. United,Eastern,Eastern,No,Grass,212.4,No,Citi Field,761598
+2026-05-03,05:30 PM,Austin FC,St. Louis City SC,Western,Western,No,Grass,712.3,No,Q2 Stadium,761599
+2026-05-09,01:00 PM,Toronto FC,Inter Miami CF,Eastern,Eastern,No,Grass,1222.1,No,BMO Field,761611
+2026-05-09,02:30 PM,Chicago Fire,Red Bull New York,Eastern,Unknown,Yes,Grass,0.0,No,Soldier Field,761600
+2026-05-09,04:30 PM,CF Montréal,Orlando City,Eastern,Eastern,No,Grass,1251.4,No,Stade Saputo,761610
+2026-05-09,07:30 PM,Atlanta United,LA Galaxy,Eastern,Western,Yes,Grass,1934.9,Yes,Mercedes-Benz Stadium,761602
+2026-05-09,07:30 PM,Charlotte FC,FC Cincinnati,Eastern,Eastern,No,Grass,336.0,No,Bank of America Stadium,761603
+2026-05-09,07:30 PM,New England Revolution,Philadelphia Union,Eastern,Eastern,No,Turf,265.4,No,Gillette Stadium,761601
+2026-05-10,08:30 PM,FC Dallas,Real Salt Lake,Western,Western,No,Grass,965.1,No,Toyota Stadium,761604
+2026-05-10,09:00 PM,Nashville SC,D.C. United,Eastern,Eastern,No,Grass,567.1,No,GEODIS Park,761605
+2026-05-10,09:30 PM,Colorado Rapids,St. Louis City SC,Western,Western,No,Grass,790.1,No,Dick's Sporting Goods Park,761606
+2026-05-10,10:30 PM,Portland Timbers,Sporting Kansas City,Western,Western,No,Turf,1482.2,No,Providence Park,761607
+2026-05-10,10:30 PM,San Jose Earthquakes,Vancouver Whitecaps,Western,Western,No,Grass,826.1,No,PayPal Park,761608
+2026-05-10,10:30 PM,Seattle Sounders,San Diego FC,Western,Unknown,Yes,Turf,0.0,No,Lumen Field,761609
+2026-05-10,04:30 PM,New York City FC,Columbus Crew,Eastern,Eastern,No,Grass,481.8,No,Yankee Stadium,761612
+2026-05-10,07:00 PM,Minnesota United,Austin FC,Western,Western,No,Grass,1036.3,No,Allianz Field,761613
+2026-05-11,09:00 PM,LAFC,Houston Dynamo,Western,Western,No,Grass,1374.2,No,BMO Stadium,761614
+2026-05-13,07:00 PM,Charlotte FC,New York City FC,Eastern,Eastern,No,Grass,539.9,No,Bank of America Stadium,761615
+2026-05-13,07:30 PM,CF Montréal,Portland Timbers,Eastern,Western,Yes,Grass,2339.7,Yes,Stade Saputo,761618
+2026-05-13,07:30 PM,D.C. United,Chicago Fire,Eastern,Eastern,No,Grass,594.9,No,Audi Field,761620
+2026-05-13,07:30 PM,FC Cincinnati,Inter Miami CF,Eastern,Eastern,No,Turf,942.2,No,TQL Stadium,761619
+2026-05-13,07:30 PM,New England Revolution,Nashville SC,Eastern,Eastern,No,Turf,925.9,No,Gillette Stadium,761617
+2026-05-13,07:30 PM,Orlando City,Philadelphia Union,Eastern,Eastern,No,Grass,851.9,No,Inter&Co Stadium,761616
+2026-05-13,07:30 PM,Red Bull New York,Columbus Crew,Unknown,Eastern,No,Grass,0.0,No,Red Bull Arena,761621
+2026-05-14,08:30 PM,FC Dallas,Vancouver Whitecaps,Western,Western,No,Grass,1737.8,Yes,Toyota Stadium,761622
+2026-05-14,08:30 PM,Minnesota United,Colorado Rapids,Western,Western,No,Grass,695.1,No,Allianz Field,761624
+2026-05-14,08:30 PM,Sporting Kansas City,LA Galaxy,Western,Western,No,Grass,1347.3,No,Children's Mercy Park,761623
+2026-05-14,08:30 PM,St. Louis City SC,LAFC,Western,Western,No,Grass,1589.5,Yes,Energizer Park,761625
+2026-05-14,09:30 PM,Real Salt Lake,Houston Dynamo,Western,Western,No,Grass,1193.5,No,America First Field,761628
+2026-05-14,09:30 PM,San Diego FC,Austin FC,Unknown,Western,No,Grass,0.0,No,Snapdragon Stadium,761627
+2026-05-14,09:30 PM,Seattle Sounders,San Jose Earthquakes,Western,Western,No,Turf,708.1,No,Lumen Field,761626
+2026-05-16,04:30 PM,CF Montréal,Chicago Fire,Eastern,Eastern,No,Grass,746.3,No,Stade Saputo,761632
+2026-05-16,07:30 PM,Charlotte FC,Toronto FC,Eastern,Eastern,No,Grass,585.9,No,Bank of America Stadium,761631
+2026-05-16,07:30 PM,D.C. United,St. Louis City SC,Eastern,Western,Yes,Grass,709.8,No,Audi Field,761630
+2026-05-16,07:30 PM,New England Revolution,Minnesota United,Eastern,Western,Yes,Turf,1111.5,No,Gillette Stadium,761635
+2026-05-16,07:30 PM,Orlando City,Atlanta United,Eastern,Eastern,No,Grass,401.8,No,Inter&Co Stadium,761634
+2026-05-16,07:30 PM,Philadelphia Union,Columbus Crew,Eastern,Eastern,No,Grass,404.8,No,Subaru Park,761629
+2026-05-16,07:30 PM,Red Bull New York,New York City FC,Unknown,Eastern,No,Grass,0.0,No,Red Bull Arena,761633
+2026-05-17,08:30 PM,Austin FC,Sporting Kansas City,Western,Western,No,Grass,625.3,No,Q2 Stadium,761637
+2026-05-17,08:30 PM,Houston Dynamo,Vancouver Whitecaps,Western,Western,No,Grass,1981.7,Yes,Shell Energy Stadium,761636
+2026-05-17,09:00 PM,Seattle Sounders,LA Galaxy,Western,Western,No,Turf,972.0,No,Lumen Field,761638
+2026-05-17,09:30 PM,Real Salt Lake,Colorado Rapids,Western,Western,No,Grass,373.3,No,America First Field,761639
+2026-05-17,09:30 PM,San Diego FC,FC Cincinnati,Unknown,Eastern,No,Grass,0.0,No,Snapdragon Stadium,761640
+2026-05-17,10:30 PM,San Jose Earthquakes,FC Dallas,Western,Western,No,Grass,1428.0,No,PayPal Park,761641
+2026-05-17,06:00 PM,Inter Miami CF,Portland Timbers,Eastern,Western,Yes,Grass,2694.8,Yes,Nu Stadium,761642
+2026-05-18,08:00 PM,Nashville SC,LAFC,Eastern,Western,Yes,Grass,1780.2,Yes,GEODIS Park,761643
+2026-05-23,02:30 PM,St. Louis City SC,Austin FC,Western,Western,No,Grass,712.3,No,Energizer Park,761644
+2026-05-23,04:30 PM,Minnesota United,Real Salt Lake,Western,Western,No,Grass,994.0,No,Allianz Field,761650
+2026-05-23,07:30 PM,Charlotte FC,New England Revolution,Eastern,Eastern,No,Grass,701.0,No,Bank of America Stadium,761647
+2026-05-23,07:30 PM,D.C. United,CF Montréal,Eastern,Eastern,No,Grass,495.1,No,Audi Field,761646
+2026-05-23,07:30 PM,FC Cincinnati,Orlando City,Eastern,Eastern,No,Turf,752.0,No,TQL Stadium,761645
+2026-05-24,08:30 PM,Chicago Fire,Toronto FC,Eastern,Eastern,No,Grass,433.4,No,Soldier Field,761648
+2026-05-24,08:30 PM,Nashville SC,New York City FC,Eastern,Eastern,No,Grass,765.8,No,GEODIS Park,761649
+2026-05-24,08:30 PM,Sporting Kansas City,Red Bull New York,Western,Unknown,Yes,Grass,0.0,No,Children's Mercy Park,761651
+2026-05-24,09:30 PM,Colorado Rapids,FC Dallas,Western,Western,No,Grass,632.2,No,Dick's Sporting Goods Park,761654
+2026-05-24,09:30 PM,Portland Timbers,San Jose Earthquakes,Western,Western,No,Turf,565.9,No,Providence Park,761653
+2026-05-24,09:30 PM,San Diego FC,Vancouver Whitecaps,Unknown,Western,No,Grass,0.0,No,Snapdragon Stadium,761652
+2026-05-24,10:30 PM,LA Galaxy,Houston Dynamo,Western,Western,No,Grass,1371.8,No,Dignity Health Sports Park,761655
+2026-05-24,05:00 PM,Columbus Crew,Atlanta United,Eastern,Eastern,No,Grass,436.0,No,ScottsMiracle-Gro Field,761656
+2026-05-24,07:00 PM,Inter Miami CF,Philadelphia Union,Eastern,Eastern,No,Grass,998.8,No,Nu Stadium,761657
+2026-05-25,09:00 PM,LAFC,Seattle Sounders,Western,Western,No,Grass,961.7,No,BMO Stadium,761658

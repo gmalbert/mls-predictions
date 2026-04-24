@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+eggs/
+*.egg-info/
+pip-wheel-metadata/
+*.egg
+
+# Unit test / coverage
+.coverage
+.coverage.*
+.cache
+.cache.sqlite
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Pytype
+.pytype/
+
+# Mypy cache
+.mypy_cache/
+
+# Rope
+.ropeproject
+
+# Env files — never commit secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# Editor / IDE
+.vscode/
+*.code-workspace
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+env/
+venv.bak/
+.Python
+
+# Trained model pickles — generated at runtime, do not commit
+models/*.pkl
+models/*.joblib
+
+# Precomputed data cache
+precomputed/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary / scratch
+tmp/
+tmp_*/
+cache/
+pr_body.txt
+
+# Node (keep-alive scripts)
+node_modules/

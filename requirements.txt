@@ -1,0 +1,24 @@
+beautifulsoup4
+numpy
+pandas
+python-dotenv
+requests
+scikit-learn
+streamlit>=1.51
+xgboost
+plotly
+scipy
+seaborn
+pytest
+altair
+schedule
+itscalledsoccer
+reportlab
+# Extended ML stack (roadmap models)
+lightgbm
+catboost
+shap
+mlflow
+# Extra data / utilities
+feedparser
+pytz

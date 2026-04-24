@@ -1,0 +1,52 @@
+name: Nightly Data Refresh
+
+on:
+  schedule:
+    # 07:00 UTC = 03:00 ET (summer) / 02:00 ET (winter) — well before any morning users
+    - cron: "0 7 * * *"
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+    inputs:
+      days_ahead:
+        description: "Days ahead to fetch fixtures (default 45)"
+        required: false
+        default: "45"
+
+permissions:
+  contents: write          # needed to commit updated CSVs
+
+jobs:
+  nightly-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python ─────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Dependencies ────────────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      # ── 4. Run pipeline ───────────────────────────────────────────────────
+      - name: Run nightly data pipeline
+        env:
+          FD_API_KEY: ${{ secrets.FD_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python automation/nightly_pipeline.py
+
+      # ── 5. Commit updated data files ──────────────────────────────────────
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "data_files/*.csv" "data_files/raw/*.csv" "logs/*.log" || true
+          git diff --staged --quiet \
+            || git commit -m "chore: nightly data refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
