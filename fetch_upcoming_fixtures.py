@@ -3,9 +3,14 @@ fetch_upcoming_fixtures.py
 Pull upcoming MLS fixtures from ESPN's public API and save to
 data_files/upcoming_fixtures.csv.
 
+Also fetches DraftKings moneylines from The Odds API and appends
+best_home_odds, best_draw_odds, best_away_odds columns when
+ODDS_API_KEY is set in .env.
+
 Usage:
     python fetch_upcoming_fixtures.py
     python fetch_upcoming_fixtures.py --days 60   # look further ahead
+    python fetch_upcoming_fixtures.py --no-odds   # skip odds fetch
 """
 
 import argparse
@@ -18,10 +23,17 @@ from os import path
 import pandas as pd
 import requests
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv optional; set env vars manually if not installed
+
 from team_name_mapping import normalize_team_name
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 ESPN_MLS_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard"
+ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/soccer_usa_mls/odds"
 DATA_DIR = "data_files"
 OUTPUT_PATH = path.join(DATA_DIR, "upcoming_fixtures.csv")
 
@@ -168,7 +180,157 @@ def fetch_day(date_str: str) -> list[dict]:
     return fixtures
 
 
-def fetch_upcoming_fixtures(days_ahead: int = 45) -> pd.DataFrame:
+# ── Odds API helpers ───────────────────────────────────────────────────────────
+
+# The Odds API uses its own team name conventions; map them to our canonical names.
+_ODDS_TEAM_MAP: dict[str, str] = {
+    "Atlanta United FC": "Atlanta United",
+    "Austin FC": "Austin FC",
+    "CF Montreal": "CF Montréal",
+    "CF Montréal": "CF Montréal",
+    "Charlotte FC": "Charlotte FC",
+    "Chicago Fire FC": "Chicago Fire",
+    "Colorado Rapids": "Colorado Rapids",
+    "Columbus Crew": "Columbus Crew",
+    "DC United": "D.C. United",
+    "D.C. United": "D.C. United",
+    "FC Cincinnati": "FC Cincinnati",
+    "FC Dallas": "FC Dallas",
+    "Houston Dynamo FC": "Houston Dynamo",
+    "Inter Miami CF": "Inter Miami CF",
+    "LA Galaxy": "LA Galaxy",
+    "Los Angeles FC": "LAFC",
+    "LAFC": "LAFC",
+    "Minnesota United FC": "Minnesota United",
+    "Nashville SC": "Nashville SC",
+    "New England Revolution": "New England Revolution",
+    "New York City FC": "New York City FC",
+    "New York Red Bulls": "New York Red Bulls",
+    "Orlando City SC": "Orlando City",
+    "Philadelphia Union": "Philadelphia Union",
+    "Portland Timbers": "Portland Timbers",
+    "Real Salt Lake": "Real Salt Lake",
+    "San Jose Earthquakes": "San Jose Earthquakes",
+    "Seattle Sounders FC": "Seattle Sounders",
+    "Sporting Kansas City": "Sporting Kansas City",
+    "St. Louis City SC": "St. Louis City SC",
+    "Toronto FC": "Toronto FC",
+    "Vancouver Whitecaps FC": "Vancouver Whitecaps",
+}
+
+
+def _normalise_odds_team(raw: str) -> str:
+    return _ODDS_TEAM_MAP.get(raw, normalize_team_name(raw))
+
+
+def _decimal_to_american(dec: float) -> int:
+    """Convert decimal odds to American moneyline."""
+    if dec >= 2.0:
+        return round((dec - 1) * 100)
+    else:
+        return round(-100 / (dec - 1))
+
+
+def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Call The Odds API and join best-available DraftKings moneylines onto
+    the fixture DataFrame.  Requires ODDS_API_KEY in environment.
+
+    Adds columns: best_home_odds, best_draw_odds, best_away_odds (American).
+    If the API key is absent or the call fails, columns are set to pd.NA.
+    """
+    api_key = os.environ.get("ODDS_API_KEY", "").strip()
+
+    for col in ("best_home_odds", "best_draw_odds", "best_away_odds"):
+        df[col] = pd.NA
+
+    if not api_key:
+        print("  [ODDS] ODDS_API_KEY not set — skipping odds enrichment.")
+        print("         Add ODDS_API_KEY=<key> to .env to enable EV analysis.")
+        return df
+
+    params = {
+        "apiKey": api_key,
+        "regions": "us",
+        "markets": "h2h",
+        "oddsFormat": "decimal",
+        "bookmakers": "draftkings,fanduel,betmgm,pointsbet,caesars",
+    }
+
+    try:
+        resp = requests.get(ODDS_API_URL, params=params, timeout=20)
+        remaining = resp.headers.get("x-requests-remaining", "?")
+        used = resp.headers.get("x-requests-used", "?")
+        print(f"  [ODDS] API usage: {used} used / {remaining} remaining")
+
+        if resp.status_code == 401:
+            print("  [ODDS] Invalid or expired ODDS_API_KEY — skipping.")
+            return df
+        if resp.status_code == 429:
+            print("  [ODDS] Rate limit hit — skipping odds for this run.")
+            return df
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"  [ODDS] Request failed: {exc} — skipping odds enrichment.")
+        return df
+
+    events = resp.json()
+    if not isinstance(events, list):
+        print("  [ODDS] Unexpected API response format.")
+        return df
+
+    # Build lookup: (home_canonical, away_canonical) → {home_odds, draw_odds, away_odds}
+    odds_lookup: dict[tuple[str, str], dict[str, float]] = {}
+
+    for event in events:
+        home_raw = event.get("home_team", "")
+        away_raw = event.get("away_team", "")
+        home_key = _normalise_odds_team(home_raw)
+        away_key = _normalise_odds_team(away_raw)
+
+        best: dict[str, float] = {}  # outcome_label → best decimal odds across books
+
+        for bookmaker in event.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market.get("key") != "h2h":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name = _normalise_odds_team(outcome.get("name", ""))
+                    price = float(outcome.get("price", 0))
+                    if price <= 1.0:
+                        continue
+                    # Map outcome name to role
+                    if name == home_key:
+                        role = "home"
+                    elif name == away_key:
+                        role = "away"
+                    else:
+                        role = "draw"  # three-way market: third outcome is draw
+                    if role not in best or price > best[role]:
+                        best[role] = price
+
+        if best:
+            odds_lookup[(home_key, away_key)] = best
+
+    matched = 0
+    for idx, row in df.iterrows():
+        home = str(row.get("HomeTeam", ""))
+        away = str(row.get("AwayTeam", ""))
+        entry = odds_lookup.get((home, away))
+        if entry:
+            if "home" in entry:
+                df.at[idx, "best_home_odds"] = _decimal_to_american(entry["home"])
+            if "draw" in entry:
+                df.at[idx, "best_draw_odds"] = _decimal_to_american(entry["draw"])
+            if "away" in entry:
+                df.at[idx, "best_away_odds"] = _decimal_to_american(entry["away"])
+            matched += 1
+
+    print(f"  [ODDS] Matched odds for {matched}/{len(df)} fixtures.")
+    return df
+
+
+def fetch_upcoming_fixtures(days_ahead: int = 45, include_odds: bool = True) -> pd.DataFrame:
     """Fetch upcoming MLS fixtures for the next *days_ahead* days."""
     os.makedirs(DATA_DIR, exist_ok=True)
     all_fixtures: list[dict] = []
@@ -193,11 +355,20 @@ def fetch_upcoming_fixtures(days_ahead: int = 45) -> pd.DataFrame:
             "Date", "Time", "HomeTeam", "AwayTeam",
             "HomeConference", "AwayConference", "CrossConference",
             "HomeSurface", "AwayTravelMiles", "IsLongHaul", "Venue", "ESPN_ID",
+            "best_home_odds", "best_draw_odds", "best_away_odds",
         ])
     else:
         df = pd.DataFrame(all_fixtures).drop_duplicates(
             subset=["Date", "HomeTeam", "AwayTeam"]
         ).sort_values("Date").reset_index(drop=True)
+
+    # ── Odds enrichment ────────────────────────────────────────────────────────
+    if include_odds:
+        df = _enrich_with_odds(df)
+    else:
+        for col in ("best_home_odds", "best_draw_odds", "best_away_odds"):
+            if col not in df.columns:
+                df[col] = pd.NA
 
     df.to_csv(OUTPUT_PATH, index=False)
     print(f"\n✅ Saved {len(df)} upcoming fixtures → {OUTPUT_PATH}")
@@ -207,5 +378,6 @@ def fetch_upcoming_fixtures(days_ahead: int = 45) -> pd.DataFrame:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch upcoming MLS fixtures from ESPN.")
     parser.add_argument("--days", type=int, default=45, help="Days ahead to look (default: 45)")
+    parser.add_argument("--no-odds", action="store_true", help="Skip The Odds API enrichment")
     args = parser.parse_args()
-    fetch_upcoming_fixtures(days_ahead=args.days)
+    fetch_upcoming_fixtures(days_ahead=args.days, include_odds=not args.no_odds)
