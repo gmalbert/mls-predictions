@@ -471,6 +471,13 @@ def main() -> None:
     print("Step 7: Adding season recency weights…")
     df_clean = add_season_weight(df_clean)
 
+    # 8b. Derived rest-day features (back-to-back flag, rest advantage)
+    if "home_rest_days" in df_clean.columns and "away_rest_days" in df_clean.columns:
+        df_clean["home_is_back_to_back"] = (df_clean["home_rest_days"] <= 3).astype(int)
+        df_clean["away_is_back_to_back"] = (df_clean["away_rest_days"] <= 3).astype(int)
+        df_clean["rest_advantage"] = df_clean["home_rest_days"] - df_clean["away_rest_days"]
+        print("Step 8b: Added back-to-back flags and rest_advantage feature.")
+
     # 9. Final clean-up: numeric conversion, fill NaN for model features
     feature_cols = [c for c in df_clean.columns if c not in (
         "MatchDate", "HomeTeam", "AwayTeam", "Result", "Source",
@@ -485,7 +492,8 @@ def main() -> None:
 
     # Fill NaN in rolling features with column medians
     rolling_cols = [c for c in df_clean.columns if any(
-        x in c for x in ["_l5", "_l10", "rest_days", "h2h", "playoff"]
+        x in c for x in ["_l5", "_l10", "rest_days", "h2h", "playoff",
+                          "back_to_back", "rest_advantage"]
     )]
     for col in rolling_cols:
         med = df_clean[col].median()
