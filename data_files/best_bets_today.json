@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "sport": "MLS",
+    "generated_at": "2026-04-30T02:04:43.577517+00:00",
+    "model_version": "1.0.0",
+    "season": "2026"
+  },
+  "bets": [
+    {
+      "game_date": "2026-04-29",
+      "game_time": null,
+      "game": "LAFC @ Inter Miami",
+      "home_team": "Inter Miami",
+      "away_team": "LAFC",
+      "bet_type": "Match Result",
+      "pick": "Home Win",
+      "confidence": 0.68,
+      "edge": 0.095,
+      "tier": "Elite",
+      "odds": -118,
+      "line": null,
+      "league": "MLS"
+    },
+    {
+      "game_date": "2026-04-29",
+      "game_time": null,
+      "game": "Philadelphia Union @ NYCFC",
+      "home_team": "NYCFC",
+      "away_team": "Philadelphia Union",
+      "bet_type": "Match Result",
+      "pick": "Draw",
+      "confidence": 0.3,
+      "edge": 0.051,
+      "tier": "Strong",
+      "odds": 240,
+      "line": null,
+      "league": "MLS"
+    }
+  ]
+}
