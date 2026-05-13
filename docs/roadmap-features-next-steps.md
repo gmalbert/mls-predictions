@@ -191,7 +191,7 @@ def display_live_matches_tab():
                         match['AwayTeam']: [stats['away'].get(s, 'N/A') for s in stat_names]
                     })
                     
-                    st.dataframe(stat_df, hide_index=True, use_container_width=True)
+                    st.dataframe(stat_df, hide_index=True, width='stretch')
     
     # Auto-refresh logic
     if auto_refresh:
@@ -515,7 +515,7 @@ if st.button("Find Value Bets"):
                     'Recommended_Stake': '{:.1%}'
                 }).background_gradient(subset=['Expected_Value'], cmap='RdYlGn')
                 
-                st.dataframe(styled_df, hide_index=True, use_container_width=True)
+                st.dataframe(styled_df, hide_index=True, width='stretch')
                 
                 st.warning("⚠️ Betting involves risk. Only bet what you can afford to lose.")
             else:

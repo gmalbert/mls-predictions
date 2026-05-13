@@ -293,7 +293,7 @@ def render_rankings_table(rankings: pd.DataFrame):
         return ''
     
     styled = display.style.applymap(color_rank, subset=['Attack Rank', 'Defense Rank'])
-    st.dataframe(styled, hide_index=True, use_container_width=True)
+    st.dataframe(styled, hide_index=True, width='stretch')
 ```
 
 ---
@@ -362,7 +362,7 @@ st.caption("Picks where the model finds ≥4% edge over current book odds")
 
 best_bets_df = generate_best_bets(upcoming_with_odds)
 if not best_bets_df.empty:
-    st.dataframe(best_bets_df, hide_index=True, use_container_width=True)
+    st.dataframe(best_bets_df, hide_index=True, width='stretch')
 else:
     st.info("No +EV edges found in today's slate. Check back as lines move.")
 ```
