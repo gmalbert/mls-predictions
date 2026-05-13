@@ -12,10 +12,11 @@ Usage:
     python fetch_asa_data.py
     python fetch_asa_data.py --seasons 2020 2021 2022 2023 2024 2025
 
-Notes on itscalledsoccer v1.3.5 quirks:
-  - get_games() requires seasons as list of STRINGS, not ints
-  - get_teams(leagues=...) crashes due to empty internal state (KeyError: 'competition')
-    → use the REST endpoint directly instead
+Notes on itscalledsoccer compatibility:
+  - v1.3.x: get_games() used `seasons=` (list of strings)
+  - v2.0.0: get_games() renamed that parameter to `season_name=` (str | list[str])
+    Also added a `status=` parameter for server-side filtering ("FullTime", "PreMatch", "Abandoned")
+  - v2.0.0: get_teams() is now stable; REST fallback kept for defensive compatibility
   - get_game_xgoals() returns 500 from ASA server → skipped
 """
 
@@ -65,12 +66,13 @@ def fetch_asa_games(seasons: list[int]) -> pd.DataFrame:
 
     team_id_map = _get_team_id_map()
 
-    # Seasons must be strings for get_games() in itscalledsoccer v1.3.5
+    # season_name accepts str or list[str] in itscalledsoccer v2.0.0
+    # (was `seasons=` in v1.3.x — renamed in the v2.0.0 breaking release)
     str_seasons = [str(s) for s in seasons]
     print(f"Fetching ASA game data for seasons: {str_seasons}…")
 
     asa = AmericanSoccerAnalysis()
-    games_df = asa.get_games(leagues="mls", seasons=str_seasons)
+    games_df = asa.get_games(leagues="mls", season_name=str_seasons, status="FullTime")
 
     if games_df.empty:
         print("  [WARN] ASA returned no game data.")

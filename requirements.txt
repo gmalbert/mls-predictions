@@ -12,7 +12,7 @@ seaborn
 pytest
 altair
 schedule
-itscalledsoccer
+itscalledsoccer>=2.0.0
 reportlab
 # Extended ML stack (roadmap models)
 lightgbm

@@ -104,7 +104,7 @@ Allow users to sort predictions by different columns.
 st.dataframe(
     upcoming_df,
     height=get_dataframe_height(upcoming_df),
-    use_container_width=True,
+    width='stretch',
     hide_index=True,
     column_config={
         "HomeWin_Prob": st.column_config.ProgressColumn(
@@ -235,7 +235,7 @@ if st.checkbox("Show Predictive Data"):
     )
     
     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 ```
 
 **Add to requirements.txt:**
