@@ -303,6 +303,132 @@ else:
 st.divider()
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SECTION 3.5 — Multi-Book EV Comparison
+# ══════════════════════════════════════════════════════════════════════════════
+
+st.subheader("📚 Multi-Book EV Comparison")
+st.caption(
+    "Compare Expected Value across individual sportsbooks for each upcoming fixture. "
+    "Highlights the best-value book per outcome."
+)
+
+# Detect per-book odds columns (pattern: {outcome}_odds_{book})
+_OUTCOME_PREFIXES = ["home", "draw", "away"]
+_KNOWN_BOOKS = ["draftkings", "fanduel", "betmgm", "pointsbet", "caesars", "bet365", "bovada"]
+
+# Build a mapping: book_name → {home_col, draw_col, away_col}
+book_cols: dict[str, dict[str, str]] = {}
+for book in _KNOWN_BOOKS:
+    h_col = f"home_odds_{book}"
+    d_col = f"draw_odds_{book}"
+    a_col = f"away_odds_{book}"
+    if h_col in fixtures.columns and a_col in fixtures.columns:
+        book_cols[book.title()] = {"home": h_col, "draw": d_col, "away": a_col}
+
+# Also check alternate naming: {book}_home / {book}_draw / {book}_away
+for book in _KNOWN_BOOKS:
+    h_col2 = f"{book}_home"
+    d_col2 = f"{book}_draw"
+    a_col2 = f"{book}_away"
+    if h_col2 in fixtures.columns and a_col2 in fixtures.columns:
+        label = book.title()
+        if label not in book_cols:
+            book_cols[label] = {"home": h_col2, "draw": d_col2, "away": a_col2}
+
+# Fallback: treat best_* cols as a single "Best Available" book
+if not book_cols:
+    for col_h, col_d, col_a in [
+        ("best_home_odds", "best_draw_odds", "best_away_odds"),
+    ]:
+        if col_h in fixtures.columns:
+            book_cols["Best Available"] = {"home": col_h, "draw": col_d, "away": col_a}
+            break
+
+if not book_cols:
+    st.info(
+        "No bookmaker odds columns found in the fixtures file.  \n"
+        "Fetch live odds via `fetch_upcoming_fixtures.py` (requires `ODDS_API_KEY` in `.env`).  \n"
+        "Per-book columns should follow the naming pattern: "
+        "`home_odds_draftkings`, `draw_odds_draftkings`, `away_odds_draftkings`, etc."
+    )
+else:
+    _has_multi = len(book_cols) > 1
+    if not _has_multi:
+        st.info(
+            "Only one odds source detected. Add `ODDS_API_KEY` to `.env` and re-run "
+            "`fetch_upcoming_fixtures.py` to enable multi-book comparison."
+        )
+
+    for _, fix in fixtures.iterrows():
+        home = str(fix.get("HomeTeam", "?"))
+        away = str(fix.get("AwayTeam", "?"))
+        date_str = str(fix.get("Date", ""))
+
+        home_xg, away_xg = compute_fixture_xg(home, away, xg_lookup)
+        dist = correct_score_distribution(home_xg, away_xg)
+        model_probs_fix = {
+            "Home": sum(p for (h, a), p in dist.items() if h > a),
+            "Draw": sum(p for (h, a), p in dist.items() if h == a),
+            "Away": sum(p for (h, a), p in dist.items() if a > h),
+        }
+        outcome_odds_keys = {"Home": "home", "Draw": "draw", "Away": "away"}
+
+        rows = []
+        for book_name, cols in book_cols.items():
+            for outcome_label, outcome_key in outcome_odds_keys.items():
+                col_name = cols.get(outcome_key, "")
+                american = fix.get(col_name) if col_name else None
+                if pd.isna(american) if american is not None else True:
+                    continue
+                try:
+                    american = int(american)
+                except (ValueError, TypeError):
+                    continue
+                model_p = model_probs_fix[outcome_label]
+                book_p = implied_probability(american)
+                ev = compute_ev(model_p, american)
+                edge = edge_percentage(model_p, book_p)
+                rows.append({
+                    "Book":        book_name,
+                    "Outcome":     f"{outcome_label} ({home if outcome_label == 'Home' else away if outcome_label == 'Away' else 'Draw'})",
+                    "Odds":        f"+{american}" if american > 0 else str(american),
+                    "Model Prob":  f"{model_p:.1%}",
+                    "Book Impl.":  f"{book_p:.1%}",
+                    "Edge":        f"{edge:+.1f}%",
+                    "EV":          f"{ev * 100:+.1f}%",
+                    "_ev_raw":     ev,
+                })
+
+        if not rows:
+            continue
+
+        label = f"📗 **{home}** vs **{away}** — {date_str}"
+        with st.expander(label, expanded=False):
+            cmp_df = pd.DataFrame(rows).drop(columns=["_ev_raw"])
+
+            def _highlight_ev(row: pd.Series) -> list[str]:
+                val_str = row.get("EV", "0%")
+                try:
+                    val = float(val_str.replace("%", "").replace("+", ""))
+                except ValueError:
+                    val = 0.0
+                color = (
+                    "background-color:#d4edda;color:#155724" if val >= 4.0
+                    else "background-color:#f8d7da;color:#721c24" if val < -2.0
+                    else ""
+                )
+                return [color] * len(row)
+
+            styled_cmp = cmp_df.style.apply(_highlight_ev, axis=1)
+            st.dataframe(styled_cmp, hide_index=True)
+            st.caption(
+                "🟢 Green = EV ≥ 4%  ·  🔴 Red = EV < −2%  ·  "
+                "Edge = model prob − vig-free book implied prob."
+            )
+
+st.divider()
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SECTION 4 — Odds Explainer
 # ══════════════════════════════════════════════════════════════════════════════
 

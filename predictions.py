@@ -8,9 +8,10 @@ from os import path
 from datetime import datetime
 from math import radians, sin, cos, sqrt, atan2
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, TimeSeriesSplit, cross_val_score
 from sklearn.metrics import mean_absolute_error, accuracy_score
 from sklearn.preprocessing import LabelEncoder
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import (
     RandomForestClassifier,
     GradientBoostingClassifier,
@@ -20,6 +21,7 @@ from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 from scipy import stats
 import plotly.graph_objects as go
+import plotly.express as px
 from plotly.subplots import make_subplots
 
 # ── New: market & EV modules ───────────────────────────────────────────────────
@@ -29,6 +31,13 @@ try:
     MODELS_AVAILABLE = True
 except ImportError:
     MODELS_AVAILABLE = False
+
+# ── New: feature analysis (SHAP / feature importance) ─────────────────────────
+try:
+    from models.feature_analysis import plot_feature_importance as _plot_feature_importance
+    _FEATURE_ANALYSIS = True
+except ImportError:
+    _FEATURE_ANALYSIS = False
 
 from footer import add_betting_oracle_footer
 from themes import apply_theme
@@ -381,6 +390,7 @@ def load_and_process_data(csv_path: str):
         X_cat[col] = le.fit_transform(X[col].astype(str))
 
     X_final = pd.concat([X_numeric, X_cat], axis=1).fillna(0)
+    original_feature_names = X_final.columns.tolist()
     X_final.columns = [f"feature_{i}" for i in range(X_final.shape[1])]
     feature_names = X_final.columns.tolist()
 
@@ -388,7 +398,7 @@ def load_and_process_data(csv_path: str):
     X_train, X_test, y_train, y_test = train_test_split(
         X_arr, y, test_size=0.2, random_state=42, stratify=y
     )
-    return X_train, X_test, y_train, y_test, feature_names, df
+    return X_train, X_test, y_train, y_test, feature_names, df, original_feature_names
 
 
 # ── League stats helper ────────────────────────────────────────────────────────
@@ -505,6 +515,39 @@ def home_page() -> None:
             st.subheader("🗓️ Upcoming MLS Fixtures")
             st.caption("*Times shown in Eastern Time (ET)*")
 
+            # ── Date-range filter ───────────────────────────────────────────
+            if "Date" in upcoming_raw.columns and not upcoming_raw.empty:
+                try:
+                    _dates = pd.to_datetime(upcoming_raw["Date"], errors="coerce").dropna()
+                    if not _dates.empty:
+                        _d_min = _dates.min().date()
+                        _d_max = _dates.max().date()
+                        _fc1, _fc2 = st.columns(2)
+                        _filter_start = _fc1.date_input(
+                            "Show fixtures from",
+                            _d_min,
+                            min_value=_d_min,
+                            max_value=_d_max,
+                            key="fix_date_start",
+                        )
+                        _filter_end = _fc2.date_input(
+                            "Show fixtures to",
+                            _d_max,
+                            min_value=_d_min,
+                            max_value=_d_max,
+                            key="fix_date_end",
+                        )
+                        _date_mask = (
+                            pd.to_datetime(upcoming_raw["Date"], errors="coerce").dt.date
+                            >= _filter_start
+                        ) & (
+                            pd.to_datetime(upcoming_raw["Date"], errors="coerce").dt.date
+                            <= _filter_end
+                        )
+                        upcoming_raw = upcoming_raw[_date_mask].reset_index(drop=True)
+                except Exception:
+                    pass  # leave unfiltered if date parsing fails
+
             for _, fixture in upcoming_raw.iterrows():
                 home = str(fixture.get("HomeTeam", "?"))
                 away = str(fixture.get("AwayTeam", "?"))
@@ -562,7 +605,7 @@ def home_page() -> None:
             )
             st.stop()
 
-        X_train, X_test, y_train, y_test, feature_names, df_hist = result
+        X_train, X_test, y_train, y_test, feature_names, df_hist, orig_feature_names = result
 
         # Train ensemble model
         with st.spinner("Training prediction model…"):
@@ -609,6 +652,9 @@ def home_page() -> None:
         display_df["Risk Score"] = [round(r, 1) for r in risk_scores]
         display_df["Risk Level"] = [risk_category(r) for r in risk_scores]
         display_df["Confidence %"] = [round(c * 100, 1) for c in conf_scores]
+        display_df["Conf. Level"] = display_df["Confidence %"].apply(
+            lambda c: "🟢 High" if c >= 65 else ("🟡 Medium" if c >= 50 else "🔴 Low")
+        )
 
         # MLS-specific columns
         if "HomeTeam" in display_df.columns and "AwayTeam" in display_df.columns:
@@ -667,6 +713,164 @@ def home_page() -> None:
             st.dataframe(styled, width="stretch", hide_index=True, height=get_dataframe_height(filtered))
         else:
             st.info("No matches found for the selected risk filter.")
+
+        # ── Export predictions to CSV ──────────────────────────────────────────
+        st.divider()
+        _csv_bytes = filtered.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download Predictions as CSV",
+            data=_csv_bytes,
+            file_name=f"mls_predictions_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            help="Download the currently visible predictions (respects risk filter).",
+            key="download_predictions",
+        )
+
+        # ── Model Diagnostics ──────────────────────────────────────────────────
+        with st.expander("🔬 Model Diagnostics", expanded=False):
+
+            # ── 1. Feature Importance chart ────────────────────────────────────
+            st.markdown("#### 📊 Feature Importance (XGBoost gain)")
+            if _FEATURE_ANALYSIS:
+                _fig_imp = _plot_feature_importance(model, orig_feature_names, top_n=20)
+                if _fig_imp:
+                    st.plotly_chart(_fig_imp, use_container_width=True)
+                else:
+                    st.info("Feature importance unavailable (XGBoost estimator not found).")
+            else:
+                # Built-in fallback using VotingClassifier's fitted estimators
+                _imp_arrays, _imp_names = [], []
+                for _nm, _est in model.estimators_:
+                    if hasattr(_est, "feature_importances_"):
+                        _imp_arrays.append(_est.feature_importances_)
+                if _imp_arrays:
+                    _avg_imp = np.mean(_imp_arrays, axis=0)
+                    _n = min(20, len(orig_feature_names), len(_avg_imp))
+                    _imp_df = pd.DataFrame(
+                        {"Feature": orig_feature_names[:len(_avg_imp)], "Importance": _avg_imp}
+                    ).nlargest(_n, "Importance").sort_values("Importance")
+                    _fig_imp2 = px.bar(
+                        _imp_df, x="Importance", y="Feature", orientation="h",
+                        title="Top Feature Importances (ensemble average)",
+                        color="Importance", color_continuous_scale="Blues",
+                    )
+                    _fig_imp2.update_layout(coloraxis_showscale=False, height=500,
+                                            margin={"l": 200, "r": 40, "t": 40, "b": 40})
+                    st.plotly_chart(_fig_imp2, use_container_width=True)
+
+            st.divider()
+
+            # ── 2. Model Comparison ────────────────────────────────────────────
+            st.markdown("#### 🏆 Model Comparison")
+            _comp_rows = []
+            for _nm, _est in model.estimators_:
+                try:
+                    _y_pred_i = _est.predict(X_test)
+                    _acc_i = accuracy_score(y_test, _y_pred_i)
+                    _comp_rows.append({"Model": _nm.upper(), "Accuracy": round(_acc_i * 100, 1)})
+                except Exception:
+                    pass
+            _comp_rows.append({"Model": "VotingClassifier (Ensemble)", "Accuracy": round(acc * 100, 1)})
+            _comp_df = pd.DataFrame(_comp_rows).sort_values("Accuracy", ascending=False)
+
+            _fig_comp = px.bar(
+                _comp_df, x="Model", y="Accuracy",
+                title="Test-Set Accuracy by Model (%)",
+                color="Accuracy", color_continuous_scale="RdYlGn",
+                text="Accuracy",
+            )
+            _fig_comp.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            _fig_comp.update_layout(
+                coloraxis_showscale=False, height=380,
+                yaxis_range=[0, 100], showlegend=False,
+            )
+            st.plotly_chart(_fig_comp, use_container_width=True)
+
+            st.divider()
+
+            # ── 3. Time-Series Cross-Validation ───────────────────────────────
+            st.markdown("#### 🕐 Time-Series Cross-Validation (5-fold)")
+            st.caption(
+                "Simulates chronological train/test splits to detect time-based degradation. "
+                "Uses Logistic Regression for speed."
+            )
+            with st.spinner("Running time-series CV…"):
+                try:
+                    _tscv = TimeSeriesSplit(n_splits=5)
+                    _lr_cv = LogisticRegression(max_iter=500, random_state=42)
+                    _X_cv = np.concatenate([X_train, X_test])
+                    _y_cv = np.concatenate([y_train, y_test])
+                    _cv_scores = cross_val_score(_lr_cv, _X_cv, _y_cv, cv=_tscv, scoring="accuracy")
+                    _cv_df = pd.DataFrame({
+                        "Fold": [f"Fold {i + 1}" for i in range(len(_cv_scores))],
+                        "Accuracy": (_cv_scores * 100).round(1),
+                    })
+                    _fig_cv = px.bar(
+                        _cv_df, x="Fold", y="Accuracy",
+                        title=f"Time-Series CV Accuracy — Mean: {_cv_scores.mean():.1%} ± {_cv_scores.std():.1%}",
+                        color="Accuracy", color_continuous_scale="Blues",
+                        text="Accuracy",
+                    )
+                    _fig_cv.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+                    _fig_cv.update_layout(
+                        coloraxis_showscale=False, height=340,
+                        yaxis_range=[0, 100],
+                    )
+                    st.plotly_chart(_fig_cv, use_container_width=True)
+                    st.caption(
+                        f"Mean CV accuracy: **{_cv_scores.mean():.1%}** "
+                        f"(std: {_cv_scores.std():.1%})  ·  "
+                        "Declining trend across folds may indicate concept drift."
+                    )
+                except Exception as _e:
+                    st.warning(f"Time-series CV failed: {_e}")
+
+            st.divider()
+
+            # ── 4. Confidence Calibration (Platt scaling) ─────────────────────
+            st.markdown("#### 🎯 Confidence Calibration (Platt Scaling)")
+            st.caption(
+                "CalibratedClassifierCV wraps the XGBoost component with sigmoid calibration. "
+                "Well-calibrated probabilities improve bet sizing."
+            )
+            with st.spinner("Training calibrated model…"):
+                try:
+                    _xgb_base = XGBClassifier(
+                        eval_metric="mlogloss", random_state=42, verbosity=0
+                    )
+                    _cal_model = CalibratedClassifierCV(_xgb_base, method="sigmoid", cv=3)
+                    _cal_model.fit(X_train, y_train)
+                    _cal_acc = accuracy_score(y_test, _cal_model.predict(X_test))
+                    _xgb_raw = XGBClassifier(
+                        eval_metric="mlogloss", random_state=42, verbosity=0
+                    )
+                    _xgb_raw.fit(X_train, y_train)
+                    _raw_acc = accuracy_score(y_test, _xgb_raw.predict(X_test))
+
+                    _cal_df = pd.DataFrame({
+                        "Model": ["XGBoost (raw)", "XGBoost + Platt scaling"],
+                        "Accuracy": [round(_raw_acc * 100, 1), round(_cal_acc * 100, 1)],
+                    })
+                    _fig_cal = px.bar(
+                        _cal_df, x="Model", y="Accuracy",
+                        title="Calibration Impact on Test Accuracy",
+                        color="Accuracy", color_continuous_scale="Greens",
+                        text="Accuracy",
+                    )
+                    _fig_cal.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+                    _fig_cal.update_layout(
+                        coloraxis_showscale=False, height=320,
+                        yaxis_range=[0, 100],
+                    )
+                    st.plotly_chart(_fig_cal, use_container_width=True)
+                    _delta = (_cal_acc - _raw_acc) * 100
+                    st.caption(
+                        f"Calibration {'improved' if _delta >= 0 else 'reduced'} accuracy by "
+                        f"**{abs(_delta):.1f}pp**. Probability calibration primarily improves "
+                        "reliability of predicted probabilities, not necessarily raw accuracy."
+                    )
+                except Exception as _e:
+                    st.warning(f"Calibration training failed: {_e}")
 
     # ══════════════════════════════════════════════════════════════════════════════
     # TAB 3 — STATISTICS

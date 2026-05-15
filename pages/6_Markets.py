@@ -1,6 +1,6 @@
 """
 pages/6_Markets.py
-BTTS, Over/Under, and Correct Score predictions for upcoming MLS fixtures.
+BTTS, Over/Under, Correct Score, and Shots-on-Target predictions for upcoming MLS fixtures.
 Powered by Poisson / Dixon-Coles model using ASA xG data.
 
 Naming convention: plain ASCII filename, icon set via st.navigation() or sidebar label.
@@ -11,6 +11,7 @@ import os
 import sys
 from os import path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -88,6 +89,49 @@ def _prob_bar(label: str, prob: float, color: str = "#4CAF50") -> str:
         f"<span style='font-size:0.8em;color:#555'>{pct}%</span>"
         f"</div>"
     )
+
+
+def _compute_sot_ou(
+    home_xg: float,
+    away_xg: float,
+    conversion_rate: float = 0.32,
+) -> dict:
+    """
+    Estimate shots-on-target O/U probabilities using Poisson distributions.
+
+    MLS average: goals ≈ 32% of shots on target (conversion_rate = 0.32).
+    Expected SoT per team = team_xg / conversion_rate.
+    Total expected SoT drawn independently from two Poisson distributions.
+
+    Returns a dict with keys: expected, home_sot, away_sot,
+    over_7_5, over_8_5, over_9_5, over_10_5.
+    """
+    from scipy.stats import poisson  # noqa: PLC0415
+
+    home_sot = max(home_xg / conversion_rate, 1.0)
+    away_sot = max(away_xg / conversion_rate, 1.0)
+    expected_total = home_sot + away_sot
+
+    results = {
+        "expected": round(expected_total, 2),
+        "home_sot": round(home_sot, 2),
+        "away_sot": round(away_sot, 2),
+    }
+
+    for line in [7.5, 8.5, 9.5, 10.5]:
+        key = f"over_{str(line).replace('.', '_')}"
+        # P(total > line) = 1 - P(total <= floor(line))
+        cutoff = int(line)
+        p_over = 0.0
+        # Convolve two independent Poisson distributions up to a reasonable max
+        max_total = cutoff + 20
+        for h in range(max_total + 1):
+            for a in range(max_total + 1 - h):
+                if h + a > cutoff:
+                    p_over += poisson.pmf(h, home_sot) * poisson.pmf(a, away_sot)
+        results[key] = round(min(p_over, 1.0), 4)
+
+    return results
 
 
 # ── League stats panel ─────────────────────────────────────────────────────────
@@ -265,4 +309,21 @@ for _, fix in fixtures.iterrows():
             f"Model inputs: {home} xG={home_xg:.2f}, {away} xG={away_xg:.2f}. "
             f"{'Turf boost applied to BTTS. ' if is_turf else ''}"
             "Poisson independence + Dixon-Coles low-score correction."
+        )
+
+        st.divider()
+
+        # Row 4: Shots on Target
+        st.markdown("**Shots on Target — Total Market**")
+        sot_probs = _compute_sot_ou(home_xg, away_xg)
+        sot_cols = st.columns(5)
+        sot_cols[0].metric("Exp. Total SoT", f"{sot_probs['expected']:.1f}")
+        sot_cols[1].metric("Over 7.5", f"{sot_probs['over_7_5']:.1%}")
+        sot_cols[2].metric("Over 8.5", f"{sot_probs['over_8_5']:.1%}")
+        sot_cols[3].metric("Over 9.5", f"{sot_probs['over_9_5']:.1%}")
+        sot_cols[4].metric("Over 10.5", f"{sot_probs['over_10_5']:.1%}")
+        st.caption(
+            f"Estimated SoT: {home} ≈{sot_probs['home_sot']:.1f}, "
+            f"{away} ≈{sot_probs['away_sot']:.1f}. "
+            "Model: SoT ≈ xG ÷ 0.32 (MLS avg conversion rate). Poisson distribution."
         )

@@ -45,6 +45,7 @@ coverage.xml
 .idea/
 *.sublime-project
 *.sublime-workspace
+.continue/
 
 # OS files
 .DS_Store
