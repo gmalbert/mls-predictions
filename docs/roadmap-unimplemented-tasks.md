@@ -10,9 +10,9 @@ This document aggregates the roadmap tasks in `docs/roadmap-*.md` that are not y
 
 ## 1. Critical / High Priority
 
-1. **REST API layer for predictions and fixture data**
+<!-- 1. **REST API layer for predictions and fixture data**
    - Source: `docs/roadmap-infrastructure.md`, `docs/roadmap-infrastructure-next-steps.md`
-   - Not implemented: no `FastAPI`/`uvicorn` service or API endpoints exist in repo.
+   - Not implemented: no `FastAPI`/`uvicorn` service or API endpoints exist in repo. -->
 
 2. **SQLite / database migration**
    - Source: `docs/roadmap-infrastructure.md`, `docs/roadmap-infrastructure-next-steps.md`
@@ -34,21 +34,21 @@ This document aggregates the roadmap tasks in `docs/roadmap-*.md` that are not y
    - Source: `docs/roadmap-models-next-steps.md`
    - Not implemented: no `TimeSeriesSplit` training workflow.
 
-7. **Live match tracker / live scores tab**
+<!-- 7. **Live match tracker / live scores tab**
    - Source: `docs/roadmap-features.md`, `docs/roadmap-features-next-steps.md`
-   - Not implemented: no live match UI or live score auto-refresh panel in the current Streamlit app.
+   - Not implemented: no live match UI or live score auto-refresh panel in the current Streamlit app. -->
 
-8. **Interactive match commentary generator**
+<!-- 8. **Interactive match commentary generator**
    - Source: `docs/roadmap-features-next-steps.md`, `docs/roadmap-quick-wins.md`
-   - Not implemented: no natural-language preview/commentary generator in the UI.
+   - Not implemented: no natural-language preview/commentary generator in the UI. -->
 
 9. **Export predictions to CSV from Streamlit UI**
    - Source: `docs/roadmap-quick-wins.md`
    - Not implemented: no `st.download_button` for predictions export.
 
-10. **Email alerts for high-confidence predictions**
+<!-- 10. **Email alerts for high-confidence predictions**
     - Source: `docs/roadmap-features-next-steps.md`
-    - Not implemented: no email alerting or SMTP integration.
+    - Not implemented: no email alerting or SMTP integration. -->
 
 ---
 
@@ -70,9 +70,9 @@ This document aggregates the roadmap tasks in `docs/roadmap-*.md` that are not y
 
 ## 3. Data Enrichment
 
-1. **Social media sentiment analysis**
+<!-- 1. **Social media sentiment analysis**
    - Source: `docs/roadmap-data-next-steps.md`
-   - Not implemented: no sentiment ingestion or sentiment-features pipeline.
+   - Not implemented: no sentiment ingestion or sentiment-features pipeline. -->
 
 2. **Transfer market activity features**
    - Source: `docs/roadmap-data-next-steps.md`
@@ -94,9 +94,9 @@ This document aggregates the roadmap tasks in `docs/roadmap-*.md` that are not y
 
 ## 4. Product / UI Enhancements
 
-1. **Match commentary text on upcoming predictions**
+<!-- 1. **Match commentary text on upcoming predictions**
    - Source: `docs/roadmap-quick-wins.md`
-   - Not implemented: no auto-generated commentary strings for upcoming fixtures.
+   - Not implemented: no auto-generated commentary strings for upcoming fixtures. -->
 
 2. **Color-coded confidence levels on prediction tables**
    - Source: `docs/roadmap-quick-wins.md`

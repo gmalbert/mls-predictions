@@ -385,6 +385,253 @@ def add_season_weight(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ── Venue-specific stadium features ───────────────────────────────────────────
+
+# Stadium capacities (2024 data). Update annually as MLS builds new stadiums.
+MLS_STADIUM_CAPACITY: dict[str, int] = {
+    "Atlanta United":          42500,
+    "Austin FC":               20738,
+    "CF Montréal":             19619,
+    "Charlotte FC":            74867,
+    "Chicago Fire":            24955,
+    "Colorado Rapids":         18061,
+    "Columbus Crew":           20371,
+    "D.C. United":             20000,
+    "FC Cincinnati":           26000,
+    "FC Dallas":               19096,
+    "Houston Dynamo":          22039,
+    "Inter Miami CF":          21550,
+    "LA Galaxy":               27000,
+    "LAFC":                    22000,
+    "Minnesota United":        19400,
+    "Nashville SC":            30000,
+    "New England Revolution":  20000,
+    "New York City FC":        30321,
+    "New York Red Bulls":      25000,
+    "Orlando City":            25500,
+    "Philadelphia Union":      18500,
+    "Portland Timbers":        25218,
+    "Real Salt Lake":          20213,
+    "San Jose Earthquakes":    18000,
+    "Seattle Sounders":        40000,
+    "Sporting Kansas City":    18467,
+    "St. Louis City SC":       22500,
+    "Toronto FC":              30000,
+    "Vancouver Whitecaps":     22120,
+}
+
+_MEDIAN_CAPACITY = 22000  # fallback for unknown teams
+
+
+def add_venue_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add venue-specific stadium features:
+      - home_stadium_capacity  : absolute capacity
+      - home_crowd_pressure    : capacity / league-median (normalised, higher = louder)
+      - home_is_large_stadium  : capacity > 28 000 (top ~10% in MLS)
+    """
+    df = df.copy()
+    df["home_stadium_capacity"] = (
+        df["HomeTeam"].map(MLS_STADIUM_CAPACITY).fillna(_MEDIAN_CAPACITY).astype(int)
+    )
+    df["home_crowd_pressure"] = (
+        df["home_stadium_capacity"] / _MEDIAN_CAPACITY
+    ).round(3)
+    df["home_is_large_stadium"] = (df["home_stadium_capacity"] > 28000).astype(int)
+    return df
+
+
+# ── Enhanced historical odds features ─────────────────────────────────────────
+
+_BOOK_HOME_COLS  = ["B365H", "BWH", "IWH", "PSH", "WHH", "VCH"]
+_BOOK_DRAW_COLS  = ["B365D", "BWD", "IWD", "PSD", "WHD", "VCD"]
+_BOOK_AWAY_COLS  = ["B365A", "BWA", "IWA", "PSA", "WHA", "VCA"]
+
+
+def _american_to_decimal(v: float) -> float:
+    """Convert American moneyline to decimal odds."""
+    if v >= 100:
+        return round(v / 100 + 1, 4)
+    elif v <= -100:
+        return round(100 / abs(v) + 1, 4)
+    return 1.0
+
+
+def add_enhanced_odds_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add bookmaker-implied probability features when historical odds columns
+    (e.g. from football-data.org: B365H/D/A) are present in the data.
+
+    New columns added (when odds present):
+      - odds_implied_home_prob : vig-free home win implied probability
+      - odds_implied_draw_prob : vig-free draw implied probability
+      - odds_implied_away_prob : vig-free away win implied probability
+      - odds_market_margin     : total book overround (1 = no vig, >1 = vig)
+      - odds_home_value        : decimal home odds (best available)
+      - odds_draw_value        : decimal draw odds (best available)
+      - odds_away_value        : decimal away odds (best available)
+    """
+    df = df.copy()
+
+    # Identify which bookmaker columns actually exist
+    home_cols = [c for c in _BOOK_HOME_COLS if c in df.columns]
+    draw_cols = [c for c in _BOOK_DRAW_COLS if c in df.columns]
+    away_cols = [c for c in _BOOK_AWAY_COLS if c in df.columns]
+
+    if not (home_cols and draw_cols and away_cols):
+        # No odds columns present — fill with neutral priors
+        df["odds_implied_home_prob"] = 0.45
+        df["odds_implied_draw_prob"] = 0.26
+        df["odds_implied_away_prob"] = 0.29
+        df["odds_market_margin"]     = 1.0
+        df["odds_home_value"]        = 2.22
+        df["odds_draw_value"]        = 3.50
+        df["odds_away_value"]        = 3.10
+        return df
+
+    # Best available decimal odds = highest decimal (most favourable for bettor)
+    df["odds_home_value"] = df[home_cols].apply(
+        lambda row: row.dropna().max() if not row.dropna().empty else np.nan, axis=1
+    )
+    df["odds_draw_value"] = df[draw_cols].apply(
+        lambda row: row.dropna().max() if not row.dropna().empty else np.nan, axis=1
+    )
+    df["odds_away_value"] = df[away_cols].apply(
+        lambda row: row.dropna().max() if not row.dropna().empty else np.nan, axis=1
+    )
+
+    # Implied probabilities (raw, still includes vig)
+    imp_h = 1.0 / df["odds_home_value"].replace(0, np.nan)
+    imp_d = 1.0 / df["odds_draw_value"].replace(0, np.nan)
+    imp_a = 1.0 / df["odds_away_value"].replace(0, np.nan)
+    total = (imp_h + imp_d + imp_a).replace(0, np.nan)
+
+    df["odds_market_margin"]     = total.round(4)
+    # Vig-removed probabilities (sum to 1.0)
+    df["odds_implied_home_prob"] = (imp_h / total).round(4)
+    df["odds_implied_draw_prob"] = (imp_d / total).round(4)
+    df["odds_implied_away_prob"] = (imp_a / total).round(4)
+
+    # Fill rows where odds were absent with neutral priors
+    fill_vals = {
+        "odds_implied_home_prob": 0.45,
+        "odds_implied_draw_prob": 0.26,
+        "odds_implied_away_prob": 0.29,
+        "odds_market_margin":     1.0,
+        "odds_home_value":        2.22,
+        "odds_draw_value":        3.50,
+        "odds_away_value":        3.10,
+    }
+    for col, fill in fill_vals.items():
+        df[col] = df[col].fillna(fill)
+
+    return df
+
+
+# ── Transfer market proxy features ────────────────────────────────────────────
+
+def add_transfer_market_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Proxy for transfer market / roster quality using ASA player goals-added data.
+
+    Computes per-team season-level average goals-added (g+) from
+    data_files/raw/asa_player_goals_added.csv and joins it onto the match df.
+
+    Columns added:
+      - home_goals_added_avg : home team's mean player goals-added per season
+      - away_goals_added_avg : away team's mean player goals-added per season
+      - goals_added_edge     : home − away (positive favours home)
+
+    Falls back to 0.0 when the ASA file is not present.
+    """
+    df = df.copy()
+    ga_path = os.path.join(RAW_DIR, "asa_player_goals_added.csv")
+
+    if not os.path.exists(ga_path):
+        df["home_goals_added_avg"] = 0.0
+        df["away_goals_added_avg"] = 0.0
+        df["goals_added_edge"]     = 0.0
+        return df
+
+    try:
+        ga_raw = pd.read_csv(ga_path)
+
+        # Identify the team and season columns (ASA schema varies slightly by version)
+        team_col   = next((c for c in ["team_name", "team", "Team"] if c in ga_raw.columns), None)
+        season_col = next((c for c in ["season_name", "season", "Season"] if c in ga_raw.columns), None)
+        # Goals-added total: prefer goals_added_total, then goals_added
+        ga_col     = next(
+            (c for c in ["goals_added_total", "goals_added", "g+"] if c in ga_raw.columns),
+            None,
+        )
+
+        if team_col is None or ga_col is None:
+            raise ValueError("Required columns not found in ASA player goals-added file.")
+
+        ga_raw[ga_col] = pd.to_numeric(ga_raw[ga_col], errors="coerce").fillna(0)
+
+        # Normalise team names for joining
+        ga_raw["team_norm"] = ga_raw[team_col].apply(normalize_team_name)
+
+        group_cols = ["team_norm"]
+        if season_col:
+            ga_raw[season_col] = pd.to_numeric(ga_raw[season_col], errors="coerce")
+            group_cols.append(season_col)
+
+        team_ga = (
+            ga_raw.groupby(group_cols)[ga_col]
+            .mean()
+            .rename("goals_added_avg")
+            .reset_index()
+        )
+
+        df["season_year"] = df["MatchDate"].dt.year
+        df["home_norm"]   = df["HomeTeam"].apply(normalize_team_name)
+        df["away_norm"]   = df["AwayTeam"].apply(normalize_team_name)
+
+        if season_col in team_ga.columns:
+            home_merge = df.merge(
+                team_ga.rename(columns={"team_norm": "home_norm", season_col: "season_year",
+                                        "goals_added_avg": "home_goals_added_avg"}),
+                on=["home_norm", "season_year"], how="left",
+            )
+            merged = home_merge.merge(
+                team_ga.rename(columns={"team_norm": "away_norm", season_col: "season_year",
+                                        "goals_added_avg": "away_goals_added_avg"}),
+                on=["away_norm", "season_year"], how="left",
+            )
+        else:
+            team_ga_simple = team_ga.set_index("team_norm")["goals_added_avg"]
+            df["home_goals_added_avg"] = df["home_norm"].map(team_ga_simple)
+            df["away_goals_added_avg"] = df["away_norm"].map(team_ga_simple)
+            merged = df
+
+        df["home_goals_added_avg"] = (
+            merged.get("home_goals_added_avg", pd.Series(dtype=float))
+            .fillna(0.0).values
+        )
+        df["away_goals_added_avg"] = (
+            merged.get("away_goals_added_avg", pd.Series(dtype=float))
+            .fillna(0.0).values
+        )
+
+    except Exception as exc:
+        print(f"  [WARN] Transfer market features failed: {exc} — defaulting to 0.")
+        df["home_goals_added_avg"] = 0.0
+        df["away_goals_added_avg"] = 0.0
+
+    df["goals_added_edge"] = (
+        df["home_goals_added_avg"] - df["away_goals_added_avg"]
+    ).round(4)
+
+    # Drop temp columns if they crept in
+    for c in ["season_year", "home_norm", "away_norm"]:
+        if c in df.columns:
+            df = df.drop(columns=[c])
+
+    return df
+
+
 # ── Combine & save ─────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -471,12 +718,24 @@ def main() -> None:
     print("Step 7: Adding season recency weights…")
     df_clean = add_season_weight(df_clean)
 
-    # 8b. Derived rest-day features (back-to-back flag, rest advantage)
+    # 8b. Venue-specific stadium features
+    print("Step 8b: Adding venue / stadium capacity features…")
+    df_clean = add_venue_features(df_clean)
+
+    # 8c. Enhanced historical odds features
+    print("Step 8c: Adding enhanced historical odds features…")
+    df_clean = add_enhanced_odds_features(df_clean)
+
+    # 8d. Transfer market proxy features (ASA goals-added)
+    print("Step 8d: Adding transfer market / roster quality proxy features…")
+    df_clean = add_transfer_market_features(df_clean)
+
+    # 8e. Derived rest-day features (back-to-back flag, rest advantage)
     if "home_rest_days" in df_clean.columns and "away_rest_days" in df_clean.columns:
         df_clean["home_is_back_to_back"] = (df_clean["home_rest_days"] <= 3).astype(int)
         df_clean["away_is_back_to_back"] = (df_clean["away_rest_days"] <= 3).astype(int)
         df_clean["rest_advantage"] = df_clean["home_rest_days"] - df_clean["away_rest_days"]
-        print("Step 8b: Added back-to-back flags and rest_advantage feature.")
+        print("Step 9: Added back-to-back flags and rest_advantage feature.")
 
     # 9. Final clean-up: numeric conversion, fill NaN for model features
     feature_cols = [c for c in df_clean.columns if c not in (
