@@ -40,6 +40,7 @@ jobs:
           FD_API_KEY: ${{ secrets.FD_API_KEY }}
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: python automation/nightly_pipeline.py
+        continue-on-error: true  # partial failures (e.g. ASA API down) must not kill picks generation
 
       # ── 4b. Generate picks from trained model ─────────────────────────────
       - name: Generate today's picks
