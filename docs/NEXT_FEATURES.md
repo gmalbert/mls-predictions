@@ -2,6 +2,13 @@
 
 > **Based on:** Codebase gap analysis as of July 2025
 
+> **Superseded implementation audit — 2026-08-24:** Features 1–5 have repository
+> implementations. Travel, standings, turf reporting, and a governed value finder
+> are implemented; DP availability is implemented as a point-in-time roster-feed
+> waterfall and remains data-dependent. The value finder is paper-only until the
+> release gate passes. Use `IMPLEMENTATION_PRIORITIES.md` instead of this document
+> to select new work.
+
 ---
 
 ## Feature 1: Travel Distance Feature

@@ -2,6 +2,12 @@
 
 # MLS Predictor — Site Summary
 
+> **Implementation audit — 2026-08-24:** This summary predates the governed
+> frontier layer. The repository now also includes Markets, Best Bets, and Frontier
+> Analytics pages, point-in-time feed contracts, snapshot/ledger storage, rolling
+> backtests, and a fail-closed release gate. Optional feeds may be empty; betting
+> remains paper-only until the gate passes.
+
 ## What This App Does
 
 Streamlit app that predicts Major League Soccer match outcomes using a soft-voting ensemble classifier, incorporating MLS-specific structural features that European soccer models ignore: salary cap parity, travel distance, artificial turf, conference structure, and Designated Player availability.
@@ -36,11 +42,11 @@ streamlit run predictions.py
 
 | File | Purpose |
 |---|---|
-| `predictions.py` | Entry point — app layout, 5 fixed tabs, logo at 250px |
+| `predictions.py` | Entry point — core app layout and logo at 250px |
 | `prepare_model_data.py` | Feature matrix builder — MLS-specific engineered features |
-| `automation/fetch_asa_data.py` | American Soccer Analysis API client (`itscalledsoccer`) |
-| `automation/fetch_mls_historical.py` | Historical match results |
-| `automation/fetch_upcoming_fixtures.py` | ESPN API — next 30 days of MLS matches |
+| `fetch_asa_data.py` | American Soccer Analysis API client (`itscalledsoccer`) |
+| `fetch_mls_historical.py` | Historical match results |
+| `fetch_upcoming_fixtures.py` | ESPN API — next 30 days of MLS matches |
 | `team_name_mapping.py` | Name normalization (ESPN / ASA / football-data.org discrepancies) |
 | `data_files/logo.png` | Sidebar logo — always render at `width=250` |
 

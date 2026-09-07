@@ -1,5 +1,10 @@
 # MLS Predictor — Model Suggested Enhancements
 
+> **Implementation audit — 2026-08-24:** The requested feature columns and
+> missingness controls are implemented in the frontier feature pipeline. DP/news,
+> roster-change, xGOT, goals-added, and segment-calibration results remain
+> provider/evidence dependent; no unavailable input is silently treated as healthy.
+
 ## Priority 1: ASA xG Feature Expansion
 
 ### xG Differential Weighting
