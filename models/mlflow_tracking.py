@@ -126,7 +126,7 @@ def _log_feature_importance(model, feature_names: list[str]) -> None:
     importances: Optional[np.ndarray] = None
     if hasattr(model, "estimators_"):
         arrays = []
-        for _, est in model.estimators_:
+        for est in model.estimators_:
             if hasattr(est, "feature_importances_"):
                 arrays.append(est.feature_importances_)
         if arrays:

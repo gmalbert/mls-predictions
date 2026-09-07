@@ -41,6 +41,16 @@ except ImportError:
 
 from footer import add_betting_oracle_footer
 from themes import apply_theme
+from models.backtesting import DixonColesBaseline
+from models.frontier_features import (
+    EASTERN_CONF as FRONTIER_EASTERN_CONF,
+    STADIUMS as FRONTIER_STADIUMS,
+    TURF_STADIUMS as FRONTIER_TURF_STADIUMS,
+    WESTERN_CONF as FRONTIER_WESTERN_CONF,
+    load_optional_sources,
+)
+from models.governance import score_distribution_markets
+from models.inference import load_frontier_artifact, predict_upcoming
 
 warnings.filterwarnings("ignore")
 
@@ -62,81 +72,13 @@ except ImportError:
 # ── Constants ──────────────────────────────────────────────────────────────────
 DATA_DIR = "data_files/"
 
-EASTERN_CONF = {
-    "Atlanta United",
-    "CF Montréal",
-    "Charlotte FC",
-    "Chicago Fire",
-    "Columbus Crew",
-    "D.C. United",
-    "FC Cincinnati",
-    "Inter Miami CF",
-    "Nashville SC",
-    "New England Revolution",
-    "New York City FC",
-    "New York Red Bulls",
-    "Orlando City",
-    "Philadelphia Union",
-    "Toronto FC",
-}
-
-WESTERN_CONF = {
-    "Austin FC",
-    "Colorado Rapids",
-    "FC Dallas",
-    "Houston Dynamo",
-    "LA Galaxy",
-    "LAFC",
-    "Minnesota United",
-    "Portland Timbers",
-    "Real Salt Lake",
-    "San Jose Earthquakes",
-    "Seattle Sounders",
-    "Sporting Kansas City",
-    "St. Louis City SC",
-    "Vancouver Whitecaps",
-}
-
-# Artificial-turf home stadiums (2024 season)
-TURF_STADIUMS = {
-    "New England Revolution",
-    "Portland Timbers",
-    "Seattle Sounders",
-    "Vancouver Whitecaps",
-    "FC Cincinnati",
-}
-
-# Stadium GPS coordinates for travel-distance calculations
-STADIUM_COORDS: dict[str, tuple[float, float]] = {
-    "Atlanta United": (33.7557, -84.4010),
-    "Austin FC": (30.3874, -97.7185),
-    "CF Montréal": (45.5623, -73.5517),
-    "Charlotte FC": (35.2258, -80.8528),
-    "Chicago Fire": (41.8623, -87.6167),
-    "Colorado Rapids": (39.8059, -104.8917),
-    "Columbus Crew": (39.9685, -83.0176),
-    "D.C. United": (38.8682, -77.0122),
-    "FC Cincinnati": (39.1110, -84.5260),
-    "FC Dallas": (33.1548, -97.0641),
-    "Houston Dynamo": (29.7524, -95.3513),
-    "Inter Miami CF": (25.9580, -80.2390),
-    "LA Galaxy": (33.8644, -118.2611),
-    "LAFC": (34.0131, -118.2845),
-    "Minnesota United": (44.9536, -93.1669),
-    "Nashville SC": (36.1306, -86.7715),
-    "New England Revolution": (42.0910, -71.2643),
-    "New York City FC": (40.8274, -73.9262),
-    "New York Red Bulls": (40.7369, -74.1503),
-    "Orlando City": (28.5411, -81.3894),
-    "Philadelphia Union": (39.8327, -75.3799),
-    "Portland Timbers": (45.5215, -122.6917),
-    "Real Salt Lake": (40.5829, -111.8929),
-    "San Jose Earthquakes": (37.3512, -121.9253),
-    "Seattle Sounders": (47.5952, -122.3316),
-    "Sporting Kansas City": (39.1212, -94.8235),
-    "St. Louis City SC": (38.6328, -90.1924),
-    "Toronto FC": (43.6332, -79.4189),
-    "Vancouver Whitecaps": (49.2772, -123.1124),
+# One authoritative metadata registry drives training, fixtures, and the UI.
+EASTERN_CONF = set(FRONTIER_EASTERN_CONF)
+WESTERN_CONF = set(FRONTIER_WESTERN_CONF)
+TURF_STADIUMS = set(FRONTIER_TURF_STADIUMS)
+STADIUM_COORDS = {
+    team: (stadium.latitude, stadium.longitude)
+    for team, stadium in FRONTIER_STADIUMS.items()
 }
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -237,23 +179,6 @@ def risk_category(score: float) -> str:
     return "🟢 Low"
 
 
-def betting_recommendation(home_prob, draw_prob, away_prob, risk_score) -> str:
-    max_prob = max(home_prob, draw_prob, away_prob)
-    if max_prob >= 0.60 and risk_score <= 30:
-        if home_prob == max_prob:
-            return "💰 Bet Home Win"
-        if draw_prob == max_prob:
-            return "💰 Bet Draw"
-        return "💰 Bet Away Win"
-    if max_prob >= 0.50 and risk_score <= 50:
-        if home_prob == max_prob:
-            return "🤔 Consider Home"
-        if draw_prob == max_prob:
-            return "🤔 Consider Draw"
-        return "🤔 Consider Away"
-    return "❌ Avoid Betting"
-
-
 # ── Cached data loaders ────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=3600)
@@ -301,9 +226,10 @@ def fetch_asa_xg_data(seasons: tuple):
 
 
 @st.cache_data(ttl=3600)
-def compute_mls_standings(df: pd.DataFrame, season_start: str = "2025-01-01") -> pd.DataFrame:
+def compute_mls_standings(df: pd.DataFrame, season_start=None) -> pd.DataFrame:
     if "MatchDate" not in df.columns or df.empty:
         return pd.DataFrame()
+    season_start = season_start or f"{datetime.now().year}-01-01"
     current = df[df["MatchDate"] >= season_start].copy()
     if current.empty:
         return pd.DataFrame()
@@ -630,9 +556,30 @@ def home_page() -> None:
         upcoming_pred_df = load_upcoming_fixtures(fixtures_file)
         n_features = X_train.shape[1]
 
-        # Feature matrix for upcoming matches (placeholder zeros until data pipeline is built)
-        X_upcoming = np.zeros((len(upcoming_pred_df), n_features))
-        proba = model_full.predict_proba(X_upcoming)
+        # Point-in-time upcoming inference. The evaluated frontier artifact is used
+        # when available; Dixon-Coles provides a meaningful score-model fallback.
+        frontier_artifact_path = path.join("models", "frontier_logistic.pkl")
+        score_model = DixonColesBaseline().fit(df_hist)
+        prediction_source = "Dixon-Coles fallback"
+        if len(upcoming_pred_df) == 0:
+            proba = np.empty((0, 3))
+        elif path.exists(frontier_artifact_path):
+            try:
+                artifact = load_frontier_artifact(frontier_artifact_path)
+                context_sources = load_optional_sources(path.join(DATA_DIR, "raw"))
+                proba = predict_upcoming(upcoming_pred_df, df_hist, artifact, context_sources)
+                prediction_source = "calibrated frontier logistic model"
+            except (OSError, ValueError, KeyError, pickle.UnpicklingError) as exc:
+                st.warning(f"Frontier artifact could not be used ({exc}); using Dixon-Coles probabilities.")
+                proba = np.vstack([
+                    score_model.predict_one(str(row.HomeTeam), str(row.AwayTeam))
+                    for row in upcoming_pred_df.itertuples()
+                ])
+        else:
+            proba = np.vstack([
+                score_model.predict_one(str(row.HomeTeam), str(row.AwayTeam))
+                for row in upcoming_pred_df.itertuples()
+            ])
 
         # Build display DataFrame
         display_cols_needed = ["Date", "Time", "HomeTeam", "AwayTeam"]
@@ -642,6 +589,12 @@ def home_page() -> None:
         display_df["Home Win %"] = (proba[:, 0] * 100).round(1)
         display_df["Draw %"] = (proba[:, 1] * 100).round(1)
         display_df["Away Win %"] = (proba[:, 2] * 100).round(1)
+        score_market_rows = [
+            score_distribution_markets(score_model.red_card_score_grid(str(row.HomeTeam), str(row.AwayTeam)))
+            for row in upcoming_pred_df.itertuples()
+        ]
+        display_df["Over 2.5 %"] = [round(markets["over"] * 100, 1) for markets in score_market_rows]
+        display_df["BTTS %"] = [round(markets["btts_yes"] * 100, 1) for markets in score_market_rows]
 
         risk_scores, conf_scores = [], []
         for i in range(len(upcoming_pred_df)):
@@ -671,16 +624,31 @@ def home_page() -> None:
                 else "No",
                 axis=1,
             )
-            display_df["Betting Tip"] = [
-                betting_recommendation(proba[i, 0], proba[i, 1], proba[i, 2], risk_scores[i])
-                for i in range(len(upcoming_pred_df))
-            ]
+            governed_states = {}
+            governed_path = path.join(DATA_DIR, "picks_today.csv")
+            if path.exists(governed_path):
+                try:
+                    governed = pd.read_csv(governed_path)
+                    if {"HomeTeam", "AwayTeam", "State"}.issubset(governed.columns):
+                        governed_states = {
+                            (str(row.HomeTeam), str(row.AwayTeam)): str(row.State)
+                            for row in governed.itertuples(index=False)
+                        }
+                except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
+                    governed_states = {}
+            display_df["Betting State"] = display_df.apply(
+                lambda row: governed_states.get(
+                    (str(row["HomeTeam"]), str(row["AwayTeam"])),
+                    "NO BET / NO GOVERNED SNAPSHOT",
+                ),
+                axis=1,
+            )
 
         # Risk filter
         st.subheader("🎯 Upcoming Match Predictions with Risk Assessment")
         st.caption(
-            "*Predictions use a zeroed feature matrix until historical MLS data is loaded. "
-            "Accuracy improves significantly once `combined_historical_data.csv` is populated.*"
+            f"Predictions use the {prediction_source}. Live staking remains closed unless the "
+            "untouched-season, market-relative, CLV, and ledger release gate passes."
         )
 
         col_f1, col_f2, col_f3, col_f4 = st.columns(4)
@@ -740,7 +708,9 @@ def home_page() -> None:
             else:
                 # Built-in fallback using VotingClassifier's fitted estimators
                 _imp_arrays, _imp_names = [], []
-                for _nm, _est in model.estimators_:
+                _configured_names = [name for name, _ in getattr(model, "estimators", [])]
+                for _idx, _est in enumerate(model.estimators_):
+                    _nm = _configured_names[_idx] if _idx < len(_configured_names) else f"estimator_{_idx}"
                     if hasattr(_est, "feature_importances_"):
                         _imp_arrays.append(_est.feature_importances_)
                 if _imp_arrays:
@@ -763,7 +733,9 @@ def home_page() -> None:
             # ── 2. Model Comparison ────────────────────────────────────────────
             st.markdown("#### 🏆 Model Comparison")
             _comp_rows = []
-            for _nm, _est in model.estimators_:
+            _comparison_names = [name for name, _ in getattr(model, "estimators", [])]
+            for _idx, _est in enumerate(model.estimators_):
+                _nm = _comparison_names[_idx] if _idx < len(_comparison_names) else f"estimator_{_idx}"
                 try:
                     _y_pred_i = _est.predict(X_test)
                     _acc_i = accuracy_score(y_test, _y_pred_i)
