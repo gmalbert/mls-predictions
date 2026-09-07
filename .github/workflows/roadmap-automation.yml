@@ -1,0 +1,83 @@
+name: MLS Roadmap Automation
+
+on:
+  schedule:
+    - cron: "0 11 * * 1"  # Monday: ASA/context/model refresh
+    - cron: "0 12 * * 5"  # Friday morning: governed matchday brief
+    - cron: "0 8 2 12 *"   # Off-season: full completed-season retraining
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "refresh, email, or retrain"
+        default: "refresh"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  roadmap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Refresh ASA, fixtures, and point-in-time context
+        if: github.event.schedule == '0 11 * * 1' || inputs.task == 'refresh'
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          MLS_MARKET_ODDS_FEED_URL: ${{ secrets.MLS_MARKET_ODDS_FEED_URL }}
+          MLS_ROSTER_FEED_URL: ${{ secrets.MLS_ROSTER_FEED_URL }}
+          MLS_TRANSACTIONS_FEED_URL: ${{ secrets.MLS_TRANSACTIONS_FEED_URL }}
+          MLS_MANAGER_FEED_URL: ${{ secrets.MLS_MANAGER_FEED_URL }}
+          MLS_EVENT_FEED_URL: ${{ secrets.MLS_EVENT_FEED_URL }}
+          MLS_GOALKEEPER_FEED_URL: ${{ secrets.MLS_GOALKEEPER_FEED_URL }}
+          MLS_ATTENDANCE_FEED_URL: ${{ secrets.MLS_ATTENDANCE_FEED_URL }}
+          MLS_SUPERDRAFT_FEED_URL: ${{ secrets.MLS_SUPERDRAFT_FEED_URL }}
+          MLS_TEAM_RATINGS_FEED_URL: ${{ secrets.MLS_TEAM_RATINGS_FEED_URL }}
+          MLS_REFEREE_FEED_URL: ${{ secrets.MLS_REFEREE_FEED_URL }}
+          MLS_LINEUP_FEED_URL: ${{ secrets.MLS_LINEUP_FEED_URL }}
+          MLS_COMPETITION_FEED_URL: ${{ secrets.MLS_COMPETITION_FEED_URL }}
+          MLS_TRAVEL_FEED_URL: ${{ secrets.MLS_TRAVEL_FEED_URL }}
+          MLS_NEWS_FEED_URL: ${{ secrets.MLS_NEWS_FEED_URL }}
+          MLS_SOCIAL_FEED_URL: ${{ secrets.MLS_SOCIAL_FEED_URL }}
+        run: python automation/nightly_pipeline.py
+        continue-on-error: true
+      - name: Settle evidence and rebuild evaluated artifact
+        if: always() && (github.event.schedule == '0 11 * * 1' || inputs.task == 'refresh')
+        run: |
+          python automation/settle_ledger.py
+          python scripts/run_backtest.py
+          python scripts/validate_operational_readiness.py
+      - name: Build evaluated Friday artifact
+        if: github.event.schedule == '0 12 * * 5' || inputs.task == 'email'
+        run: |
+          python prepare_model_data.py
+          python scripts/run_backtest.py
+          python scripts/validate_operational_readiness.py
+      - name: Generate governed Friday slate
+        if: github.event.schedule == '0 12 * * 5' || inputs.task == 'email'
+        run: python scripts/generate_picks.py
+      - name: Send Friday matchday email
+        if: github.event.schedule == '0 12 * * 5' || inputs.task == 'email'
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MATCHDAY_EMAIL_FROM: ${{ secrets.MATCHDAY_EMAIL_FROM }}
+          MATCHDAY_EMAIL_TO: ${{ secrets.MATCHDAY_EMAIL_TO }}
+        run: python automation/matchday_email.py
+      - name: Off-season/manual retraining
+        if: github.event.schedule == '0 8 2 12 *' || inputs.task == 'retrain'
+        run: python automation/retrain_model.py
+      - name: Commit reproducible data and reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data_files/*.csv data_files/*.json data_files/raw/*.csv data_files/backtests/*.csv data_files/backtests/*.json data_files/mls.db || true
+          git diff --staged --quiet || git commit -m "chore: refresh MLS roadmap artifacts"
+          git push

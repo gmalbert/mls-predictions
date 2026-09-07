@@ -42,6 +42,12 @@ jobs:
         run: python automation/nightly_pipeline.py
         continue-on-error: true  # partial failures (e.g. ASA API down) must not kill picks generation
 
+      - name: Refit evaluated frontier artifact
+        run: |
+          python automation/settle_ledger.py
+          python scripts/run_backtest.py
+        continue-on-error: true
+
       # ── 4b. Generate picks from trained model ─────────────────────────────
       - name: Generate today's picks
         run: python scripts/generate_picks.py
@@ -61,7 +67,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "data_files/*.csv" "data_files/raw/*.csv" "logs/*.log" data_files/best_bets_today.json || true
+          git add "data_files/*.csv" "data_files/raw/*.csv" "logs/*.log" data_files/best_bets_today.json data_files/mls.db || true
           git diff --staged --quiet \
             || git commit -m "chore: nightly data refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push

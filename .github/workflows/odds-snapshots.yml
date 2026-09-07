@@ -1,0 +1,39 @@
+name: MLS Selection and Closing Odds Snapshots
+
+on:
+  schedule:
+    # Half-hourly during the broad Friday-Sunday MLS match window in UTC.
+    - cron: "15,45 18-23 * * 5,6,0"
+    - cron: "15,45 0-5 * * 6,0,1"
+  workflow_dispatch:
+
+concurrency:
+  group: mls-odds-snapshots
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Archive current multi-book prices
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          MLS_MARKET_ODDS_FEED_URL: ${{ secrets.MLS_MARKET_ODDS_FEED_URL }}
+        run: python automation/refresh_context.py --odds-only
+      - name: Persist immutable odds observations
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data_files/raw/multi_book_odds.csv data_files/mls.db || true
+          git diff --staged --quiet || git commit -m "chore: archive MLS odds snapshot"
+          git pull --rebase
+          git push

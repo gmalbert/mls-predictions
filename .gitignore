@@ -73,6 +73,10 @@ precomputed/
 tmp/
 tmp_*/
 cache/
+.mplconfig/
+.tmp_streamlit*.log
+data_files/picks_today.csv
+data_files/matchday_email_preview.html
 pr_body.txt
 
 # Node (keep-alive scripts)
