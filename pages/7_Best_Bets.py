@@ -87,8 +87,10 @@ def _load_team_xg() -> pd.DataFrame:
 st.title("💰 Best Bets")
 st.caption(
     "Expected Value engine · Team Rankings · Rest-Day Analysis  \n"
-    "⚠️ Model-derived probabilities for informational purposes only. Bet responsibly."
+    "⚠️ This legacy Poisson page is research-only. Governed selections and the "
+    "release state live in Frontier Analytics."
 )
+st.warning("NO BET / RESEARCH ONLY — this page never authorizes or exports a wager.")
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 fixtures = _load_fixtures(_fixtures_mtime())
@@ -253,7 +255,7 @@ st.divider()
 # SECTION 3 — Best Bets (only when odds data available)
 # ══════════════════════════════════════════════════════════════════════════════
 
-st.subheader("🎯 Today's Best Bets")
+st.subheader("🎯 Today's EV Research Candidates")
 
 odds_available = any(
     c in fixtures.columns for c in ["best_home_odds", "best_draw_odds", "best_away_odds"]
@@ -292,12 +294,13 @@ else:
             "Try lowering the thresholds or check back when lines move."
         )
     else:
-        st.success(f"Found **{len(best_df)}** +EV pick(s) meeting your criteria.")
+        best_df.insert(0, "State", "NO BET / RESEARCH")
+        st.info(f"Found **{len(best_df)}** research candidate(s) meeting your filters.")
         st.dataframe(best_df, hide_index=True)
         st.caption(
             "EV = (Model Prob × Decimal Odds) − 1. Positive EV means the model "
-            "estimates a higher probability than the book implies. Past performance "
-            "does not guarantee future results."
+            "estimates a higher probability than the book implies. These are not "
+            "governed selections and are never added to the betting ledger."
         )
 
 st.divider()
@@ -309,7 +312,7 @@ st.divider()
 st.subheader("📚 Multi-Book EV Comparison")
 st.caption(
     "Compare Expected Value across individual sportsbooks for each upcoming fixture. "
-    "Highlights the best-value book per outcome."
+    "Highlights price differences for research; it does not authorize a selection."
 )
 
 # Detect per-book odds columns (pattern: {outcome}_odds_{book})

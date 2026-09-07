@@ -85,7 +85,9 @@ def main() -> None:
         except (TypeError, ValueError):
             edge = 0.0
 
-        if edge < 0.02:
+        # External export is intentionally closed until the model release gate
+        # passes. Paper and no-bet rows remain visible in the internal dashboard.
+        if str(row.get("State", "NO BET")).upper() != "RELEASED" or edge < 0.03:
             continue
 
         tier = _tier_from_edge(edge)
@@ -103,7 +105,7 @@ def main() -> None:
         odds = _decimal_to_american(row.get("Odds"))
 
         bet: dict = {
-            "game_date": str(today),
+            "game_date": str(row.get("Date", today)),
             "game_time": None,
             "game": game,
             "home_team": home,

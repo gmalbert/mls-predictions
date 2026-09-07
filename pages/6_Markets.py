@@ -28,18 +28,13 @@ from models.market_predictions import (
     over_under_probabilities,
     top_correct_scores,
 )
+from models.frontier_features import TURF_STADIUMS
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 DATA_DIR = path.join(_root, "data_files")
 FIXTURES_PATH = path.join(DATA_DIR, "upcoming_fixtures.csv")
 HIST_PATH = path.join(DATA_DIR, "combined_historical_data.csv")
 ASA_XG_PATH = path.join(DATA_DIR, "raw", "asa_team_xg.csv")
-
-TURF_STADIUMS = {
-    "New England Revolution", "Portland Timbers",
-    "Seattle Sounders", "Vancouver Whitecaps", "FC Cincinnati",
-}
-
 
 # ── Cached loaders ─────────────────────────────────────────────────────────────
 
@@ -299,7 +294,8 @@ for _, fix in fixtures.iterrows():
         st.divider()
 
         # Row 3: Correct Score
-        st.markdown("**Top 5 Correct Scores**")
+        st.markdown("**Top 5 Correct Scores — research only**")
+        st.warning("Correct-score betting is disabled until provider-specific historical validation is adequate.")
         cs_cols = st.columns(5)
         for i, (score, pct) in enumerate(top_scores):
             cs_cols[i].metric(score, f"{pct}%")
@@ -314,7 +310,8 @@ for _, fix in fixtures.iterrows():
         st.divider()
 
         # Row 4: Shots on Target
-        st.markdown("**Shots on Target — Total Market**")
+        st.markdown("**Shots on Target — research only**")
+        st.warning("Player/shot props are disabled; these distributions are descriptive research, not selections.")
         sot_probs = _compute_sot_ou(home_xg, away_xg)
         sot_cols = st.columns(5)
         sot_cols[0].metric("Exp. Total SoT", f"{sot_probs['expected']:.1f}")
