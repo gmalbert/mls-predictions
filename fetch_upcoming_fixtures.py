@@ -30,6 +30,12 @@ except ImportError:
     pass  # python-dotenv optional; set env vars manually if not installed
 
 from team_name_mapping import normalize_team_name
+from models.frontier_features import (
+    EASTERN_CONF as FRONTIER_EASTERN_CONF,
+    STADIUMS as FRONTIER_STADIUMS,
+    TURF_STADIUMS as FRONTIER_TURF_STADIUMS,
+    WESTERN_CONF as FRONTIER_WESTERN_CONF,
+)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 ESPN_MLS_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard"
@@ -45,58 +51,12 @@ HEADERS = {
     )
 }
 
-TURF_STADIUMS = {
-    "New England Revolution",
-    "Portland Timbers",
-    "Seattle Sounders",
-    "Vancouver Whitecaps",
-    "FC Cincinnati",
-}
-
-EASTERN_CONF = {
-    "Atlanta United", "CF Montréal", "Charlotte FC", "Chicago Fire",
-    "Columbus Crew", "D.C. United", "FC Cincinnati", "Inter Miami CF",
-    "Nashville SC", "New England Revolution", "New York City FC",
-    "New York Red Bulls", "Orlando City", "Philadelphia Union", "Toronto FC",
-}
-
-WESTERN_CONF = {
-    "Austin FC", "Colorado Rapids", "FC Dallas", "Houston Dynamo",
-    "LA Galaxy", "LAFC", "Minnesota United", "Portland Timbers",
-    "Real Salt Lake", "San Jose Earthquakes", "Seattle Sounders",
-    "Sporting Kansas City", "St. Louis City SC", "Vancouver Whitecaps",
-}
-
-STADIUM_COORDS: dict[str, tuple[float, float]] = {
-    "Atlanta United": (33.7557, -84.4010),
-    "Austin FC": (30.3874, -97.7185),
-    "CF Montréal": (45.5623, -73.5517),
-    "Charlotte FC": (35.2258, -80.8528),
-    "Chicago Fire": (41.8623, -87.6167),
-    "Colorado Rapids": (39.8059, -104.8917),
-    "Columbus Crew": (39.9685, -83.0176),
-    "D.C. United": (38.8682, -77.0122),
-    "FC Cincinnati": (39.1110, -84.5260),
-    "FC Dallas": (33.1548, -97.0641),
-    "Houston Dynamo": (29.7524, -95.3513),
-    "Inter Miami CF": (25.9580, -80.2390),
-    "LA Galaxy": (33.8644, -118.2611),
-    "LAFC": (34.0131, -118.2845),
-    "Minnesota United": (44.9536, -93.1669),
-    "Nashville SC": (36.1306, -86.7715),
-    "New England Revolution": (42.0910, -71.2643),
-    "New York City FC": (40.8274, -73.9262),
-    "New York Red Bulls": (40.7369, -74.1503),
-    "Orlando City": (28.5411, -81.3894),
-    "Philadelphia Union": (39.8327, -75.3799),
-    "Portland Timbers": (45.5215, -122.6917),
-    "Real Salt Lake": (40.5829, -111.8929),
-    "San Jose Earthquakes": (37.3512, -121.9253),
-    "Seattle Sounders": (47.5952, -122.3316),
-    "Sporting Kansas City": (39.1212, -94.8235),
-    "St. Louis City SC": (38.6328, -90.1924),
-    "Toronto FC": (43.6332, -79.4189),
-    "Vancouver Whitecaps": (49.2772, -123.1124),
+EASTERN_CONF = set(FRONTIER_EASTERN_CONF)
+WESTERN_CONF = set(FRONTIER_WESTERN_CONF)
+TURF_STADIUMS = set(FRONTIER_TURF_STADIUMS)
+STADIUM_COORDS = {
+    team: (stadium.latitude, stadium.longitude)
+    for team, stadium in FRONTIER_STADIUMS.items()
 }
 
 
@@ -241,7 +201,11 @@ def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
     """
     api_key = os.environ.get("ODDS_API_KEY", "").strip()
 
-    for col in ("best_home_odds", "best_draw_odds", "best_away_odds"):
+    for col in (
+        "best_home_odds", "best_draw_odds", "best_away_odds",
+        "draftkings_home_odds", "draftkings_draw_odds", "draftkings_away_odds",
+        "best_home_book", "best_draw_book", "best_away_book",
+    ):
         df[col] = pd.NA
 
     if not api_key:
@@ -280,7 +244,7 @@ def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     # Build lookup: (home_canonical, away_canonical) → {home_odds, draw_odds, away_odds}
-    odds_lookup: dict[tuple[str, str], dict[str, float]] = {}
+    odds_lookup: dict[tuple[str, str], dict[str, dict]] = {}
 
     for event in events:
         home_raw = event.get("home_team", "")
@@ -288,9 +252,11 @@ def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
         home_key = _normalise_odds_team(home_raw)
         away_key = _normalise_odds_team(away_raw)
 
-        best: dict[str, float] = {}  # outcome_label → best decimal odds across books
+        best: dict[str, tuple[float, str]] = {}
+        draftkings: dict[str, float] = {}
 
         for bookmaker in event.get("bookmakers", []):
+            book_key = str(bookmaker.get("key", bookmaker.get("title", "unknown")))
             for market in bookmaker.get("markets", []):
                 if market.get("key") != "h2h":
                     continue
@@ -306,11 +272,13 @@ def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
                         role = "away"
                     else:
                         role = "draw"  # three-way market: third outcome is draw
-                    if role not in best or price > best[role]:
-                        best[role] = price
+                    if role not in best or price > best[role][0]:
+                        best[role] = (price, book_key)
+                    if book_key == "draftkings":
+                        draftkings[role] = price
 
         if best:
-            odds_lookup[(home_key, away_key)] = best
+            odds_lookup[(home_key, away_key)] = {"best": best, "draftkings": draftkings}
 
     matched = 0
     for idx, row in df.iterrows():
@@ -318,12 +286,15 @@ def _enrich_with_odds(df: pd.DataFrame) -> pd.DataFrame:
         away = str(row.get("AwayTeam", ""))
         entry = odds_lookup.get((home, away))
         if entry:
-            if "home" in entry:
-                df.at[idx, "best_home_odds"] = _decimal_to_american(entry["home"])
-            if "draw" in entry:
-                df.at[idx, "best_draw_odds"] = _decimal_to_american(entry["draw"])
-            if "away" in entry:
-                df.at[idx, "best_away_odds"] = _decimal_to_american(entry["away"])
+            for role in ("home", "draw", "away"):
+                if role in entry["best"]:
+                    price, book = entry["best"][role]
+                    df.at[idx, f"best_{role}_odds"] = _decimal_to_american(float(price))
+                    df.at[idx, f"best_{role}_book"] = str(book)
+                if role in entry["draftkings"]:
+                    df.at[idx, f"draftkings_{role}_odds"] = _decimal_to_american(
+                        float(entry["draftkings"][role])
+                    )
             matched += 1
 
     print(f"  [ODDS] Matched odds for {matched}/{len(df)} fixtures.")
@@ -356,6 +327,8 @@ def fetch_upcoming_fixtures(days_ahead: int = 45, include_odds: bool = True) -> 
             "HomeConference", "AwayConference", "CrossConference",
             "HomeSurface", "AwayTravelMiles", "IsLongHaul", "Venue", "ESPN_ID",
             "best_home_odds", "best_draw_odds", "best_away_odds",
+            "draftkings_home_odds", "draftkings_draw_odds", "draftkings_away_odds",
+            "best_home_book", "best_draw_book", "best_away_book",
         ])
     else:
         df = pd.DataFrame(all_fixtures).drop_duplicates(
@@ -366,7 +339,11 @@ def fetch_upcoming_fixtures(days_ahead: int = 45, include_odds: bool = True) -> 
     if include_odds:
         df = _enrich_with_odds(df)
     else:
-        for col in ("best_home_odds", "best_draw_odds", "best_away_odds"):
+        for col in (
+            "best_home_odds", "best_draw_odds", "best_away_odds",
+            "draftkings_home_odds", "draftkings_draw_odds", "draftkings_away_odds",
+            "best_home_book", "best_draw_book", "best_away_book",
+        ):
             if col not in df.columns:
                 df[col] = pd.NA
 

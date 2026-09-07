@@ -14,7 +14,9 @@ Usage:
     python prepare_model_data.py
 """
 
+import ast
 import os
+import sys
 from collections import defaultdict
 from datetime import datetime
 from math import radians, sin, cos, sqrt, atan2
@@ -23,62 +25,30 @@ import numpy as np
 import pandas as pd
 
 from team_name_mapping import normalize_team_name
+from models.frontier_features import (
+    EASTERN_CONF as FRONTIER_EASTERN_CONF,
+    STADIUMS as FRONTIER_STADIUMS,
+    TURF_STADIUMS as FRONTIER_TURF_STADIUMS,
+    WESTERN_CONF as FRONTIER_WESTERN_CONF,
+    add_frontier_features,
+    load_optional_sources,
+)
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # ── Directory paths ────────────────────────────────────────────────────────────
 DATA_DIR = "data_files"
 RAW_DIR = os.path.join(DATA_DIR, "raw")
 OUTPUT_PATH = os.path.join(DATA_DIR, "combined_historical_data.csv")
 
-# ── MLS lookup tables (mirrors predictions.py constants) ──────────────────────
-EASTERN_CONF = {
-    "Atlanta United", "CF Montréal", "Charlotte FC", "Chicago Fire",
-    "Columbus Crew", "D.C. United", "FC Cincinnati", "Inter Miami CF",
-    "Nashville SC", "New England Revolution", "New York City FC",
-    "New York Red Bulls", "Orlando City", "Philadelphia Union", "Toronto FC",
-}
-
-WESTERN_CONF = {
-    "Austin FC", "Colorado Rapids", "FC Dallas", "Houston Dynamo",
-    "LA Galaxy", "LAFC", "Minnesota United", "Portland Timbers",
-    "Real Salt Lake", "San Jose Earthquakes", "Seattle Sounders",
-    "Sporting Kansas City", "St. Louis City SC", "Vancouver Whitecaps",
-}
-
-TURF_STADIUMS = {
-    "New England Revolution", "Portland Timbers",
-    "Seattle Sounders", "Vancouver Whitecaps", "FC Cincinnati",
-}
-
-STADIUM_COORDS: dict[str, tuple[float, float]] = {
-    "Atlanta United": (33.7557, -84.4010),
-    "Austin FC": (30.3874, -97.7185),
-    "CF Montréal": (45.5623, -73.5517),
-    "Charlotte FC": (35.2258, -80.8528),
-    "Chicago Fire": (41.8623, -87.6167),
-    "Colorado Rapids": (39.8059, -104.8917),
-    "Columbus Crew": (39.9685, -83.0176),
-    "D.C. United": (38.8682, -77.0122),
-    "FC Cincinnati": (39.1110, -84.5260),
-    "FC Dallas": (33.1548, -97.0641),
-    "Houston Dynamo": (29.7524, -95.3513),
-    "Inter Miami CF": (25.9580, -80.2390),
-    "LA Galaxy": (33.8644, -118.2611),
-    "LAFC": (34.0131, -118.2845),
-    "Minnesota United": (44.9536, -93.1669),
-    "Nashville SC": (36.1306, -86.7715),
-    "New England Revolution": (42.0910, -71.2643),
-    "New York City FC": (40.8274, -73.9262),
-    "New York Red Bulls": (40.7369, -74.1503),
-    "Orlando City": (28.5411, -81.3894),
-    "Philadelphia Union": (39.8327, -75.3799),
-    "Portland Timbers": (45.5215, -122.6917),
-    "Real Salt Lake": (40.5829, -111.8929),
-    "San Jose Earthquakes": (37.3512, -121.9253),
-    "Seattle Sounders": (47.5952, -122.3316),
-    "Sporting Kansas City": (39.1212, -94.8235),
-    "St. Louis City SC": (38.6328, -90.1924),
-    "Toronto FC": (43.6332, -79.4189),
-    "Vancouver Whitecaps": (49.2772, -123.1124),
+# ── Centralized MLS metadata ──────────────────────────────────────────────────
+EASTERN_CONF = set(FRONTIER_EASTERN_CONF)
+WESTERN_CONF = set(FRONTIER_WESTERN_CONF)
+TURF_STADIUMS = set(FRONTIER_TURF_STADIUMS)
+STADIUM_COORDS = {
+    team: (stadium.latitude, stadium.longitude)
+    for team, stadium in FRONTIER_STADIUMS.items()
 }
 
 # MLS playoff format: top 9 in each conference qualify (as of 2024 format)
@@ -152,7 +122,40 @@ def load_raw_data() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.concat(frames, ignore_index=True)
+    df["HomeTeam"] = df["HomeTeam"].astype(str).apply(normalize_team_name)
+    df["AwayTeam"] = df["AwayTeam"].astype(str).apply(normalize_team_name)
     df["MatchDate"] = pd.to_datetime(df["MatchDate"], errors="coerce")
+
+    # Optional phase/competition manifest is joined only when it was available
+    # before kickoff, allowing regular season, playoffs, and Leagues Cup to remain
+    # distinct in the rolling audit.
+    phase_path = os.path.join(RAW_DIR, "competition_phases.csv")
+    if os.path.exists(phase_path):
+        try:
+            phases = pd.read_csv(phase_path)
+            if "available_at" in phases.columns:
+                phases["available_at"] = pd.to_datetime(phases["available_at"], errors="coerce", utc=True).dt.tz_localize(None)
+                phase_date_col = next((c for c in ("MatchDate", "event_date", "date") if c in phases.columns), None)
+                if phase_date_col:
+                    phases[phase_date_col] = pd.to_datetime(phases[phase_date_col], errors="coerce")
+                    phases = phases[phases["available_at"] < phases[phase_date_col]]
+                phase_columns = [column for column in ("Competition", "Phase") if column in phases.columns]
+                if phase_columns:
+                    if "game_id" in phases.columns and "game_id" in df.columns:
+                        df = df.merge(phases[["game_id", *phase_columns]].drop_duplicates("game_id"), on="game_id", how="left", suffixes=("", "_manifest"))
+                    elif phase_date_col and {"HomeTeam", "AwayTeam"}.issubset(phases.columns):
+                        phases["HomeTeam"] = phases["HomeTeam"].map(normalize_team_name)
+                        phases["AwayTeam"] = phases["AwayTeam"].map(normalize_team_name)
+                        phases = phases.rename(columns={phase_date_col: "MatchDate"})
+                        keys = ["MatchDate", "HomeTeam", "AwayTeam"]
+                        df = df.merge(phases[[*keys, *phase_columns]].drop_duplicates(keys), on=keys, how="left", suffixes=("", "_manifest"))
+                    for column in phase_columns:
+                        manifest_column = f"{column}_manifest"
+                        if manifest_column in df.columns:
+                            df[column] = df.get(column, pd.Series(index=df.index, dtype=object)).fillna(df[manifest_column])
+                            df = df.drop(columns=[manifest_column])
+        except (OSError, pd.errors.ParserError, ValueError) as exc:
+            print(f"  [WARN] Could not apply competition phase manifest: {exc}")
     df = df.dropna(subset=["MatchDate", "HomeTeam", "AwayTeam"])
     df = df.sort_values("MatchDate").reset_index(drop=True)
 
@@ -192,6 +195,11 @@ def add_rolling_features(df: pd.DataFrame, lookbacks: list[int] = [5, 10]) -> pd
     their previous matches.  Uses a running dict to avoid O(n²) lookups.
     """
     df = df.sort_values("MatchDate").reset_index(drop=True)
+    home_xg_source = df["home_xgoals"] if "home_xgoals" in df.columns else pd.Series(np.nan, index=df.index)
+    away_xg_source = df["away_xgoals"] if "away_xgoals" in df.columns else pd.Series(np.nan, index=df.index)
+    home_xg_raw = pd.to_numeric(home_xg_source, errors="coerce")
+    away_xg_raw = pd.to_numeric(away_xg_source, errors="coerce")
+    df["xg_data_missing"] = (home_xg_raw.isna() | away_xg_raw.isna()).astype(float)
 
     # team_history[team] = deque of dicts {goals_for, goals_against, xg_for, xg_against, points}
     team_history: dict[str, list[dict]] = defaultdict(list)
@@ -216,13 +224,20 @@ def add_rolling_features(df: pd.DataFrame, lookbacks: list[int] = [5, 10]) -> pd
                     stats[f"goals_against_l{lb}"] = np.nan
                     stats[f"xg_against_l{lb}"] = np.nan
                 else:
-                    xg_vals = [h["xg_for"] for h in window if not np.isnan(h["xg_for"])]
-                    stats[f"xg_l{lb}"] = float(np.mean(xg_vals)) if xg_vals else np.nan
+                    def _recency_weighted(key: str) -> float:
+                        values = [h[key] for h in window if not np.isnan(h[key])]
+                        if not values:
+                            return np.nan
+                        # Latest match receives weight 1.0; each older observation
+                        # decays by 15%, matching the roadmap's recency emphasis.
+                        weights = np.power(0.85, np.arange(len(values) - 1, -1, -1))
+                        return float(np.average(values, weights=weights))
+
+                    stats[f"xg_l{lb}"] = _recency_weighted("xg_for")
                     stats[f"pts_l{lb}"] = float(np.mean([h["points"] for h in window]))
                     stats[f"goals_for_l{lb}"] = float(np.mean([h["goals_for"] for h in window]))
                     stats[f"goals_against_l{lb}"] = float(np.mean([h["goals_against"] for h in window]))
-                    xga_vals = [h["xg_against"] for h in window if not np.isnan(h["xg_against"])]
-                    stats[f"xg_against_l{lb}"] = float(np.mean(xga_vals)) if xga_vals else np.nan
+                    stats[f"xg_against_l{lb}"] = _recency_weighted("xg_against")
             # Rest days
             if hist:
                 last_date = hist[-1]["date"]
@@ -245,8 +260,13 @@ def add_rolling_features(df: pd.DataFrame, lookbacks: list[int] = [5, 10]) -> pd
 
         hg = float(row.get("HomeGoals", 0) or 0)
         ag = float(row.get("AwayGoals", 0) or 0)
-        hxg = float(row.get("home_xgoals", hg) or hg)
-        axg = float(row.get("away_xgoals", ag) or ag)
+        # A missing feed value falls back to the observed score only so rolling
+        # histories remain numerically usable.  xg_data_missing makes that
+        # degraded input explicit to training, evaluation, and the UI.
+        hxg_raw = pd.to_numeric(row.get("home_xgoals"), errors="coerce")
+        axg_raw = pd.to_numeric(row.get("away_xgoals"), errors="coerce")
+        hxg = hg if pd.isna(hxg_raw) else float(hxg_raw)
+        axg = ag if pd.isna(axg_raw) else float(axg_raw)
 
         team_history[home].append({
             "date": row["MatchDate"],
@@ -316,10 +336,12 @@ def add_standings_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Running points tally per season
     team_season_pts: dict[tuple[str, int], int] = defaultdict(int)
-    team_season_played: dict[tuple[str, int], int] = defaultdict(int)
+    season_participants: dict[int, set[str]] = defaultdict(set)
+    for season, season_rows in df.groupby(df["MatchDate"].dt.year):
+        season_participants[int(season)] = set(season_rows["HomeTeam"]).union(season_rows["AwayTeam"])
 
-    home_gap: list[int] = []
-    away_gap: list[int] = []
+    home_gap: list[float] = []
+    away_gap: list[float] = []
 
     for _, row in df.iterrows():
         home, away = row["HomeTeam"], row["AwayTeam"]
@@ -328,20 +350,23 @@ def add_standings_features(df: pd.DataFrame) -> pd.DataFrame:
         home_conf = _conference(home)
         away_conf = _conference(away)
 
-        def _playoff_gap(team: str, team_season: int) -> int:
+        def _playoff_gap(team: str, team_season: int) -> float:
             conf = _conference(team)
             if conf == "Unknown":
                 return 0
-            conf_teams = EASTERN_CONF if conf == "Eastern" else WESTERN_CONF
+            current_conference = EASTERN_CONF if conf == "Eastern" else WESTERN_CONF
+            conf_teams = current_conference.intersection(season_participants[team_season])
             conf_pts = {
                 t: team_season_pts[(t, team_season)]
                 for t in conf_teams
             }
-            # Sort by points descending
+            # Compare points to the ninth-place cutoff and express the margin in
+            # three-point-win equivalents. Positive is inside/ahead of the line.
             sorted_pts = sorted(conf_pts.values(), reverse=True)
             team_pts = conf_pts.get(team, 0)
-            rank = sum(1 for p in sorted_pts if p > team_pts) + 1
-            return MLS_PLAYOFF_SPOTS - rank  # positive = inside, negative = outside
+            cutoff_index = min(MLS_PLAYOFF_SPOTS - 1, len(sorted_pts) - 1)
+            cutoff_points = sorted_pts[cutoff_index] if sorted_pts else 0
+            return round((team_pts - cutoff_points) / 3.0, 3)
 
         home_gap.append(_playoff_gap(home, season))
         away_gap.append(_playoff_gap(away, season))
@@ -350,8 +375,6 @@ def add_standings_features(df: pd.DataFrame) -> pd.DataFrame:
         result = row.get("Result", "")
         team_season_pts[(home, season)] += 3 if result == "H" else (1 if result == "D" else 0)
         team_season_pts[(away, season)] += 3 if result == "A" else (1 if result == "D" else 0)
-        team_season_played[(home, season)] += 1
-        team_season_played[(away, season)] += 1
 
     df["home_games_from_playoff"] = home_gap
     df["away_games_from_playoff"] = away_gap
@@ -361,14 +384,8 @@ def add_standings_features(df: pd.DataFrame) -> pd.DataFrame:
 # ── Designated player placeholder ─────────────────────────────────────────────
 
 def add_dp_flag(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Designated player availability flag.
-    Default 0.5 (unknown) until live injury/roster data is integrated.
-    Future: replace with real-time roster availability via MLS API.
-    """
-    df["home_dp_available"] = 0.5
-    df["away_dp_available"] = 0.5
-    return df
+    """Deprecated compatibility shim; frontier feeds own availability features."""
+    return df.copy()
 
 
 # ── Season recency weight ──────────────────────────────────────────────────────
@@ -387,37 +404,8 @@ def add_season_weight(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Venue-specific stadium features ───────────────────────────────────────────
 
-# Stadium capacities (2024 data). Update annually as MLS builds new stadiums.
-MLS_STADIUM_CAPACITY: dict[str, int] = {
-    "Atlanta United":          42500,
-    "Austin FC":               20738,
-    "CF Montréal":             19619,
-    "Charlotte FC":            74867,
-    "Chicago Fire":            24955,
-    "Colorado Rapids":         18061,
-    "Columbus Crew":           20371,
-    "D.C. United":             20000,
-    "FC Cincinnati":           26000,
-    "FC Dallas":               19096,
-    "Houston Dynamo":          22039,
-    "Inter Miami CF":          21550,
-    "LA Galaxy":               27000,
-    "LAFC":                    22000,
-    "Minnesota United":        19400,
-    "Nashville SC":            30000,
-    "New England Revolution":  20000,
-    "New York City FC":        30321,
-    "New York Red Bulls":      25000,
-    "Orlando City":            25500,
-    "Philadelphia Union":      18500,
-    "Portland Timbers":        25218,
-    "Real Salt Lake":          20213,
-    "San Jose Earthquakes":    18000,
-    "Seattle Sounders":        40000,
-    "Sporting Kansas City":    18467,
-    "St. Louis City SC":       22500,
-    "Toronto FC":              30000,
-    "Vancouver Whitecaps":     22120,
+MLS_STADIUM_CAPACITY = {
+    team: stadium.capacity for team, stadium in FRONTIER_STADIUMS.items()
 }
 
 _MEDIAN_CAPACITY = 22000  # fallback for unknown teams
@@ -480,6 +468,7 @@ def add_enhanced_odds_features(df: pd.DataFrame) -> pd.DataFrame:
 
     if not (home_cols and draw_cols and away_cols):
         # No odds columns present — fill with neutral priors
+        df["odds_data_available"] = 0
         df["odds_implied_home_prob"] = 0.45
         df["odds_implied_draw_prob"] = 0.26
         df["odds_implied_away_prob"] = 0.29
@@ -488,6 +477,8 @@ def add_enhanced_odds_features(df: pd.DataFrame) -> pd.DataFrame:
         df["odds_draw_value"]        = 3.50
         df["odds_away_value"]        = 3.10
         return df
+
+    df["odds_data_available"] = 1
 
     # Best available decimal odds = highest decimal (most favourable for bettor)
     df["odds_home_value"] = df[home_cols].apply(
@@ -532,19 +523,130 @@ def add_enhanced_odds_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_transfer_market_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Proxy for transfer market / roster quality using ASA player goals-added data.
+    Deprecated compatibility shim for the former season-level goals-added join.
 
-    Computes per-team season-level average goals-added (g+) from
-    data_files/raw/asa_player_goals_added.csv and joins it onto the match df.
+    Season aggregates can contain post-match information and are therefore not
+    safe model inputs. Point-in-time rolling g+ is now created by
+    ``models.frontier_features.add_frontier_features`` from rows carrying an
+    ``available_at`` timestamp. This shim returns explicit missing-data values so
+    an old caller cannot silently reintroduce target leakage.
 
     Columns added:
       - home_goals_added_avg : home team's mean player goals-added per season
       - away_goals_added_avg : away team's mean player goals-added per season
       - goals_added_edge     : home − away (positive favours home)
 
-    Falls back to 0.0 when the ASA file is not present.
+    The legacy implementation below is intentionally unreachable and retained
+    temporarily only to keep historical blame context compact.
     """
     df = df.copy()
+    df["home_goals_added_avg"] = 0.0
+    df["away_goals_added_avg"] = 0.0
+    df["goals_added_edge"] = 0.0
+    df["goals_added_data_missing"] = 1
+    return df
+
+
+def add_archived_market_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Overlay genuinely archived selection/closing multi-book prices.
+
+    The archive is populated before kickoff by ``automation/refresh_context.py``.
+    Rows lacking event identity or a valid pre-kickoff ``available_at`` timestamp
+    are ignored; neutral odds placeholders therefore never become market evidence.
+    """
+    archive_path = os.path.join(RAW_DIR, "multi_book_odds.csv")
+    if not os.path.exists(archive_path):
+        return df
+    try:
+        prices = pd.read_csv(archive_path)
+    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError):
+        return df
+    required = {
+        "commence_time", "home_team", "away_team", "snapshot_at", "available_at",
+        "market", "selection", "american_odds",
+    }
+    if prices.empty or not required.issubset(prices.columns):
+        return df
+    prices = prices[prices["market"].astype(str).str.lower().isin({"h2h", "1x2"})].copy()
+    prices["_kickoff"] = pd.to_datetime(prices["commence_time"], errors="coerce", utc=True)
+    prices["_snapshot"] = pd.to_datetime(prices["snapshot_at"], errors="coerce", utc=True)
+    prices["_available"] = pd.to_datetime(prices["available_at"], errors="coerce", utc=True)
+    prices = prices[
+        prices["_kickoff"].notna()
+        & prices["_snapshot"].notna()
+        & prices["_available"].notna()
+        & (prices["_available"] < prices["_kickoff"])
+        & (prices["_snapshot"] < prices["_kickoff"])
+    ].copy()
+    if prices.empty:
+        return df
+    prices["_date"] = prices["_kickoff"].dt.date.astype(str)
+    prices["_home"] = prices["home_team"].astype(str).map(normalize_team_name)
+    prices["_away"] = prices["away_team"].astype(str).map(normalize_team_name)
+    selection_names = prices["selection"].astype(str).map(normalize_team_name).str.lower()
+    prices["_side"] = np.where(
+        (selection_names == prices["_home"].str.lower()) | (selection_names == "home"), "home",
+        np.where(
+            (selection_names == prices["_away"].str.lower()) | (selection_names == "away"),
+            "away",
+            np.where(selection_names == "draw", "draw", ""),
+        ),
+    )
+    prices = prices[prices["_side"].isin({"home", "draw", "away"})]
+    prices["_decimal"] = pd.to_numeric(prices["american_odds"], errors="coerce").map(
+        lambda value: _american_to_decimal(float(value)) if pd.notna(value) else np.nan
+    )
+    prices = prices[prices["_decimal"] > 1.0]
+    closing_flag = pd.to_numeric(
+        prices.get("is_closing", pd.Series(0, index=prices.index)), errors="coerce"
+    ).fillna(0).astype(bool)
+    keys = ["_date", "_home", "_away", "_side"]
+    selection_prices = prices.sort_values("_snapshot").groupby(keys, as_index=False).first()
+    closing_prices = prices[closing_flag].sort_values("_snapshot").groupby(keys, as_index=False).last()
+    selection_wide = selection_prices.pivot(index=["_date", "_home", "_away"], columns="_side", values="_decimal")
+    closing_wide = closing_prices.pivot(index=["_date", "_home", "_away"], columns="_side", values="_decimal") if not closing_prices.empty else pd.DataFrame()
+
+    output = df.copy()
+    match_dates = pd.to_datetime(output["MatchDate"], errors="coerce").dt.date.astype(str)
+    match_keys = list(zip(
+        match_dates,
+        output["HomeTeam"].astype(str).map(normalize_team_name),
+        output["AwayTeam"].astype(str).map(normalize_team_name),
+    ))
+    available = []
+    for index, key in zip(output.index, match_keys):
+        if key not in selection_wide.index:
+            available.append(0)
+            continue
+        selection_row = selection_wide.loc[key]
+        close_row = closing_wide.loc[key] if not closing_wide.empty and key in closing_wide.index else selection_row
+        if not all(pd.notna(selection_row.get(side)) for side in ("home", "draw", "away")):
+            available.append(0)
+            continue
+        closing_values: dict[str, float] = {}
+        for side in ("home", "draw", "away"):
+            output.loc[index, f"odds_{side}_value"] = float(selection_row[side])
+            closing_candidate = close_row.get(side, np.nan)
+            closing_values[side] = float(closing_candidate) if pd.notna(closing_candidate) else float(selection_row[side])
+            output.loc[index, f"closing_{side}_value"] = closing_values[side]
+        selection_baseline = np.array([float(selection_row[side]) for side in ("home", "draw", "away")])
+        selection_implied = 1.0 / selection_baseline
+        selection_implied /= selection_implied.sum()
+        output.loc[index, [
+            "selection_implied_home_prob", "selection_implied_draw_prob", "selection_implied_away_prob"
+        ]] = selection_implied
+        baseline = np.array([closing_values[side] for side in ("home", "draw", "away")])
+        implied = 1.0 / baseline
+        implied /= implied.sum()
+        output.loc[index, ["odds_implied_home_prob", "odds_implied_draw_prob", "odds_implied_away_prob"]] = implied
+        output.loc[index, "odds_market_margin"] = float((1.0 / baseline).sum())
+        available.append(1)
+    output["odds_data_available"] = available
+    return output
+
+    # Legacy implementation retained below for source-history context only.
+    # It is not executable because season-wide player snapshots are not
+    # point-in-time safe.
     ga_path = os.path.join(RAW_DIR, "asa_player_goals_added.csv")
 
     if not os.path.exists(ga_path):
@@ -564,6 +666,27 @@ def add_transfer_market_features(df: pd.DataFrame) -> pd.DataFrame:
             (c for c in ["goals_added_total", "goals_added", "g+"] if c in ga_raw.columns),
             None,
         )
+
+        # itscalledsoccer v2 returns one nested action list per player. Flatten
+        # that schema and map team_id through the team xG snapshot.
+        if ga_col is None and "data" in ga_raw.columns:
+            def _sum_goals_added(value: object) -> float:
+                try:
+                    actions = ast.literal_eval(str(value))
+                    return float(sum(float(action.get("goals_added_above_avg", action.get("goals_added_raw", 0))) for action in actions))
+                except (ValueError, SyntaxError, TypeError):
+                    return 0.0
+
+            ga_raw["goals_added_total"] = ga_raw["data"].apply(_sum_goals_added)
+            ga_col = "goals_added_total"
+        if team_col is None and "team_id" in ga_raw.columns:
+            team_xg_path = os.path.join(RAW_DIR, "asa_team_xg.csv")
+            if os.path.exists(team_xg_path):
+                team_xg = pd.read_csv(team_xg_path)
+                if {"team_id", "team_name"}.issubset(team_xg.columns):
+                    team_map = team_xg.drop_duplicates("team_id").set_index("team_id")["team_name"]
+                    ga_raw["team_name"] = ga_raw["team_id"].map(team_map)
+                    team_col = "team_name"
 
         if team_col is None or ga_col is None:
             raise ValueError("Required columns not found in ASA player goals-added file.")
@@ -710,12 +833,8 @@ def main() -> None:
     print("Step 5: Computing playoff race features…")
     df_clean = add_standings_features(df_clean)
 
-    # 7. Designated player placeholder
-    print("Step 6: Adding designated player flags (placeholder)…")
-    df_clean = add_dp_flag(df_clean)
-
-    # 8. Season recency weight
-    print("Step 7: Adding season recency weights…")
+    # 7. Season recency weight
+    print("Step 6: Adding season recency weights…")
     df_clean = add_season_weight(df_clean)
 
     # 8b. Venue-specific stadium features
@@ -725,10 +844,13 @@ def main() -> None:
     # 8c. Enhanced historical odds features
     print("Step 8c: Adding enhanced historical odds features…")
     df_clean = add_enhanced_odds_features(df_clean)
+    df_clean = add_archived_market_features(df_clean)
 
-    # 8d. Transfer market proxy features (ASA goals-added)
-    print("Step 8d: Adding transfer market / roster quality proxy features…")
-    df_clean = add_transfer_market_features(df_clean)
+    # 8d. Frontier point-in-time context: altitude, time zones, roster mechanisms,
+    # tactical/event quality, coaching/expansion priors, GPAA, attendance and more.
+    print("Step 8d: Adding frontier point-in-time MLS features…")
+    frontier_sources = load_optional_sources(RAW_DIR)
+    df_clean = add_frontier_features(df_clean, frontier_sources)
 
     # 8e. Derived rest-day features (back-to-back flag, rest advantage)
     if "home_rest_days" in df_clean.columns and "away_rest_days" in df_clean.columns:
@@ -741,7 +863,7 @@ def main() -> None:
     feature_cols = [c for c in df_clean.columns if c not in (
         "MatchDate", "HomeTeam", "AwayTeam", "Result", "Source",
         "HomeConference", "AwayConference", "Season", "game_id", "FD_ID",
-        "Matchday", "status",
+        "Matchday", "status", "competition_phase",
     )]
     for col in feature_cols:
         try:
@@ -755,7 +877,8 @@ def main() -> None:
                           "back_to_back", "rest_advantage"]
     )]
     for col in rolling_cols:
-        med = df_clean[col].median()
+        values = df_clean[col].dropna()
+        med = values.median() if not values.empty else 0.0
         df_clean[col] = df_clean[col].fillna(med if pd.notna(med) else 0)
 
     df_clean = df_clean.sort_values("MatchDate").reset_index(drop=True)

@@ -74,6 +74,7 @@ def _import_modules():
         "fetch_asa_data",
         "fetch_mls_historical",
         "fetch_upcoming_fixtures",
+        "automation.refresh_context",
         "prepare_model_data",
     ]:
         try:
@@ -130,6 +131,16 @@ def main() -> None:
     else:
         log.warning("fetch_upcoming_fixtures module unavailable — skipping.")
         results["fetch_fixtures"] = False
+
+    # ── Step 3b: Timestamped roster/news/weather/odds context ───────────────
+    if modules.get("automation.refresh_context"):
+        results["refresh_context"] = run_step(
+            "Step 3b — Refresh point-in-time context",
+            modules["automation.refresh_context"].main,
+        )
+    else:
+        log.warning("refresh_context module unavailable — skipping.")
+        results["refresh_context"] = False
 
     # ── Step 4: Feature engineering ───────────────────────────────────────────
     # Only run if we have some raw game data

@@ -31,6 +31,7 @@ CANONICAL_TEAMS = {
     "Portland Timbers",
     "Real Salt Lake",
     "San Jose Earthquakes",
+    "San Diego FC",
     "Seattle Sounders",
     "Sporting Kansas City",
     "St. Louis City SC",
@@ -136,6 +137,7 @@ _NAME_MAP: dict[str, str] = {
     "phi": "Philadelphia Union",
     # Portland Timbers
     "portland timbers": "Portland Timbers",
+    "portland timbers fc": "Portland Timbers",
     "por": "Portland Timbers",
     "timbers": "Portland Timbers",
     # Real Salt Lake
@@ -146,6 +148,10 @@ _NAME_MAP: dict[str, str] = {
     "sj earthquakes": "San Jose Earthquakes",
     "sje": "San Jose Earthquakes",
     "san jose": "San Jose Earthquakes",
+    # San Diego FC
+    "san diego fc": "San Diego FC",
+    "san diego": "San Diego FC",
+    "sdfc": "San Diego FC",
     # Seattle Sounders
     "seattle sounders fc": "Seattle Sounders",
     "seattle sounders": "Seattle Sounders",
@@ -173,14 +179,18 @@ _NAME_MAP: dict[str, str] = {
 }
 
 
-def normalize_team_name(raw_name: str) -> str:
+def normalize_team_name(raw_name: object) -> str:
     """Return the canonical team name for a raw string from any data source.
 
     Falls back to the original (stripped) string if no match is found so the
     caller always gets *something* back rather than None.
     """
+    if raw_name is None:
+        return ""
+    if not isinstance(raw_name, str):
+        raw_name = str(raw_name)
     if not raw_name:
-        return raw_name
+        return ""
     key = raw_name.strip().lower()
     return _NAME_MAP.get(key, raw_name.strip())
 
