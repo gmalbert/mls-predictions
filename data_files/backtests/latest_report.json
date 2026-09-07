@@ -1,0 +1,454 @@
+{
+  "generated_at": "2026-09-07T11:07:45.127523+00:00",
+  "code_version": "e6564eeca16b29bf461f8f46dccae139e8b71853",
+  "data_hash": "b4c5b9d4b68a687fbecdfb1121993babaa85713914673762cd388d929d47224c",
+  "features": [
+    "home_xg_l5",
+    "away_xg_l5",
+    "home_xg_l10",
+    "away_xg_l10",
+    "home_xg_against_l5",
+    "away_xg_against_l5",
+    "home_pts_l5",
+    "away_pts_l5",
+    "home_rest_days",
+    "away_rest_days",
+    "away_travel_miles",
+    "is_long_haul",
+    "home_is_turf",
+    "is_cross_conference",
+    "home_games_from_playoff",
+    "away_games_from_playoff",
+    "home_xg_differential_momentum",
+    "away_xg_differential_momentum",
+    "home_xg_home_away_diff",
+    "away_xg_home_away_diff",
+    "travel_load",
+    "time_zone_shift",
+    "home_altitude_ft",
+    "altitude_gain_ft",
+    "turf_to_grass_visitor",
+    "grass_to_turf_visitor",
+    "home_short_rest",
+    "away_short_rest",
+    "travel_turnaround_interaction",
+    "travel_surface_interaction",
+    "conference_strength_edge",
+    "hierarchical_rating_edge",
+    "home_early_season_reliability",
+    "away_early_season_reliability",
+    "home_expansion_prior",
+    "away_expansion_prior"
+  ],
+  "folds": [
+    {
+      "season": 2025,
+      "trained_through": 2024,
+      "calibration_matches": 108,
+      "untouched_matches": 432,
+      "season_complete": true,
+      "full_untouched_season": false,
+      "temperature": 1.2693799940390262,
+      "conformal_quantile": 0.7754362813082837,
+      "segment_temperatures": {
+        "home_is_turf=1": 0.7018032330883334,
+        "is_long_haul=1": 0.8675479902583739,
+        "is_cross_conference=1": 0.7232400263324913
+      },
+      "segment_calibration_diagnostics": {
+        "home_is_turf=0": {
+          "samples": 85,
+          "base_log_loss": 1.067772798315485,
+          "candidate_log_loss": 1.0658116591400626,
+          "applied": false
+        },
+        "home_is_turf=1": {
+          "samples": 23,
+          "base_log_loss": 0.9761178207860036,
+          "candidate_log_loss": 0.9472361590247373,
+          "applied": true
+        },
+        "is_long_haul=0": {
+          "samples": 87,
+          "base_log_loss": 1.0561042468050932,
+          "candidate_log_loss": 1.0556908766710584,
+          "applied": false
+        },
+        "is_long_haul=1": {
+          "samples": 21,
+          "base_log_loss": 1.0157299172786292,
+          "candidate_log_loss": 1.0070503032306344,
+          "applied": true
+        },
+        "is_cross_conference=0": {
+          "samples": 89,
+          "base_log_loss": 1.0648098309595495,
+          "candidate_log_loss": 1.0635436592403198,
+          "applied": false
+        },
+        "is_cross_conference=1": {
+          "samples": 19,
+          "base_log_loss": 0.9707011989207586,
+          "candidate_log_loss": 0.9436495041208202,
+          "applied": true
+        }
+      },
+      "model": {
+        "samples": 432,
+        "accuracy": 0.49074074074074076,
+        "log_loss": 1.0452130560271318,
+        "brier": 0.6286297383105685,
+        "rps": 0.22087259866068687,
+        "ece": 0.04870859610828505
+      },
+      "elo": {
+        "samples": 432,
+        "accuracy": 0.48842592592592593,
+        "log_loss": 1.045844536063639,
+        "brier": 0.6286581959032771,
+        "rps": 0.22109406095565706,
+        "ece": 0.021695886289837832
+      },
+      "dixon_coles": {
+        "samples": 432,
+        "accuracy": 0.44675925925925924,
+        "log_loss": 1.0778964900690313,
+        "brier": 0.6514658836525068,
+        "rps": 0.2316395176927968,
+        "ece": 0.04725114207158673
+      },
+      "home_field": {
+        "samples": 432,
+        "accuracy": 0.4375,
+        "log_loss": 1.081419443436156,
+        "brier": 0.6552761198013648,
+        "rps": 0.23388325385214714,
+        "ece": 0.05996335963923344
+      },
+      "betting": {
+        "selections": 0,
+        "turnover_units": 0.0,
+        "roi": null,
+        "max_drawdown_units": null,
+        "median_clv": null,
+        "status": "odds-unavailable"
+      }
+    },
+    {
+      "season": 2026,
+      "trained_through": 2025,
+      "calibration_matches": 0,
+      "untouched_matches": 343,
+      "season_complete": false,
+      "full_untouched_season": false,
+      "temperature": 1.2693799940390262,
+      "conformal_quantile": 0.7754362813082837,
+      "segment_temperatures": {
+        "home_is_turf=1": 0.7018032330883334,
+        "is_long_haul=1": 0.8675479902583739,
+        "is_cross_conference=1": 0.7232400263324913
+      },
+      "segment_calibration_diagnostics": {},
+      "model": {
+        "samples": 343,
+        "accuracy": 0.4752186588921283,
+        "log_loss": 1.0600810618612402,
+        "brier": 0.6368600252011141,
+        "rps": 0.22160008078739937,
+        "ece": 0.03762477442256979
+      },
+      "elo": {
+        "samples": 343,
+        "accuracy": 0.48104956268221577,
+        "log_loss": 1.0518601357514303,
+        "brier": 0.6335402842778217,
+        "rps": 0.22172126057533761,
+        "ece": 0.022839618460981086
+      },
+      "dixon_coles": {
+        "samples": 343,
+        "accuracy": 0.4489795918367347,
+        "log_loss": 1.0825673586991935,
+        "brier": 0.6550151761515879,
+        "rps": 0.23179137409954384,
+        "ece": 0.0436771310302433
+      },
+      "home_field": {
+        "samples": 343,
+        "accuracy": 0.46647230320699706,
+        "log_loss": 1.0614683949258765,
+        "brier": 0.6407287728013183,
+        "rps": 0.2249531734652455,
+        "ece": 0.02374296098086992
+      },
+      "betting": {
+        "selections": 0,
+        "turnover_units": 0.0,
+        "roi": null,
+        "max_drawdown_units": null,
+        "median_clv": null,
+        "status": "odds-unavailable"
+      }
+    }
+  ],
+  "aggregate": {
+    "model": {
+      "samples": 775,
+      "accuracy": 0.4838709677419355,
+      "log_loss": 1.0517933476414534,
+      "brier": 0.6322723039924487,
+      "rps": 0.22119456816967056,
+      "ece": 0.029333696620304522
+    },
+    "elo": {
+      "samples": 775,
+      "accuracy": 0.48516129032258065,
+      "log_loss": 1.048506924054494,
+      "brier": 0.6308189137258174,
+      "rps": 0.22137164736798018,
+      "ece": 0.021502429478469722
+    },
+    "dixon_coles": {
+      "samples": 775,
+      "accuracy": 0.447741935483871,
+      "log_loss": 1.0799637261208321,
+      "brier": 0.6530367318166163,
+      "rps": 0.23170672639926682,
+      "ece": 0.044515479505961096
+    },
+    "home_field": {
+      "samples": 775,
+      "accuracy": 0.4503225806451613,
+      "log_loss": 1.0725894955148323,
+      "brier": 0.6488377455806992,
+      "rps": 0.22993097311317004,
+      "ece": 0.043932912233015764
+    }
+  },
+  "market_comparison": {},
+  "betting": {
+    "selections": 0,
+    "turnover_units": 0.0,
+    "roi": null,
+    "max_drawdown_units": null,
+    "median_clv": null,
+    "status": "odds-unavailable"
+  },
+  "segments": {
+    "competition_phase": {
+      "Unknown": {
+        "samples": 775,
+        "accuracy": 0.4838709677419355,
+        "log_loss": 1.0517933476414534,
+        "brier": 0.6322723039924487,
+        "rps": 0.22119456816967056,
+        "ece": 0.029333696620304522
+      }
+    },
+    "travel_km": {
+      "extreme": {
+        "samples": 12,
+        "accuracy": 0.5833333333333334,
+        "log_loss": 0.9317009075346392,
+        "brier": 0.5526264488623053,
+        "rps": 0.187883198723637,
+        "ece": 0.21246629295048264
+      },
+      "local": {
+        "samples": 202,
+        "accuracy": 0.5,
+        "log_loss": 1.055162411736411,
+        "brier": 0.6359464150340458,
+        "rps": 0.2247577088815556,
+        "ece": 0.0727793783736421
+      },
+      "long-haul": {
+        "samples": 132,
+        "accuracy": 0.49242424242424243,
+        "log_loss": 1.0346899717678129,
+        "brier": 0.6178247744386081,
+        "rps": 0.22762171866052525,
+        "ece": 0.03720418385806211
+      },
+      "regional": {
+        "samples": 429,
+        "accuracy": 0.47086247086247085,
+        "log_loss": 1.0588287880829936,
+        "brier": 0.6372155527856097,
+        "rps": 0.21847102072155591,
+        "ece": 0.03257573314734119
+      }
+    },
+    "home_is_turf": {
+      "0": {
+        "samples": 618,
+        "accuracy": 0.47896440129449835,
+        "log_loss": 1.0518581480684097,
+        "brier": 0.6336318641241142,
+        "rps": 0.22212820254251442,
+        "ece": 0.03389449770599017
+      },
+      "1": {
+        "samples": 157,
+        "accuracy": 0.5031847133757962,
+        "log_loss": 1.0515382733493566,
+        "brier": 0.6269206596525166,
+        "rps": 0.2175194978358011,
+        "ece": 0.10816682956774148
+      }
+    },
+    "is_long_haul": {
+      "0": {
+        "samples": 633,
+        "accuracy": 0.48183254344391785,
+        "log_loss": 1.0566293697449056,
+        "brier": 0.636091356317967,
+        "rps": 0.22036342854093074,
+        "ece": 0.04119867760252718
+      },
+      "1": {
+        "samples": 142,
+        "accuracy": 0.49295774647887325,
+        "log_loss": 1.0302355871380358,
+        "brier": 0.615247936935737,
+        "rps": 0.22489957792313758,
+        "ece": 0.056551562444340446
+      }
+    },
+    "is_cross_conference": {
+      "0": {
+        "samples": 639,
+        "accuracy": 0.48043818466353677,
+        "log_loss": 1.0565686043199982,
+        "brier": 0.6353334000977396,
+        "rps": 0.22353663650118705,
+        "ece": 0.029071144767808352
+      },
+      "1": {
+        "samples": 136,
+        "accuracy": 0.5,
+        "log_loss": 1.0293566636885845,
+        "brier": 0.6178896539095011,
+        "rps": 0.2101902912296779,
+        "ece": 0.030833359556573802
+      }
+    },
+    "turf_to_grass_visitor": {
+      "0.0": {
+        "samples": 642,
+        "accuracy": 0.48130841121495327,
+        "log_loss": 1.0587677152893007,
+        "brier": 0.6367687592604749,
+        "rps": 0.2229305323013619,
+        "ece": 0.044795445569889035
+      },
+      "1.0": {
+        "samples": 133,
+        "accuracy": 0.49624060150375937,
+        "log_loss": 1.0181276030556032,
+        "brier": 0.610567610142277,
+        "rps": 0.21281495183473956,
+        "ece": 0.09233222961729014
+      }
+    },
+    "home_altitude_ft": {
+      "high": {
+        "samples": 49,
+        "accuracy": 0.5714285714285714,
+        "log_loss": 0.9520654507385242,
+        "brier": 0.5599789358183975,
+        "rps": 0.21824274820379838,
+        "ece": 0.18405345178985144
+      },
+      "low": {
+        "samples": 703,
+        "accuracy": 0.48364153627311524,
+        "log_loss": 1.0533524007238875,
+        "brier": 0.6336918021010379,
+        "rps": 0.2202499906636453,
+        "ece": 0.04128245167468592
+      },
+      "medium": {
+        "samples": 23,
+        "accuracy": 0.30434782608695654,
+        "log_loss": 1.2166043316106858,
+        "brier": 0.74290134182681,
+        "rps": 0.25635444491156106,
+        "ece": 0.27732113960183646
+      }
+    },
+    "home_mid_season_roster_changes": {
+      "stable": {
+        "samples": 775,
+        "accuracy": 0.4838709677419355,
+        "log_loss": 1.0517933476414534,
+        "brier": 0.6322723039924487,
+        "rps": 0.22119456816967056,
+        "ece": 0.029333696620304522
+      }
+    },
+    "home_manager_tenure_days": {
+      "established": {
+        "samples": 775,
+        "accuracy": 0.4838709677419355,
+        "log_loss": 1.0517933476414534,
+        "brier": 0.6322723039924487,
+        "rps": 0.22119456816967056,
+        "ece": 0.029333696620304522
+      }
+    },
+    "prediction_horizon": {
+      "pre-match": {
+        "samples": 775,
+        "accuracy": 0.4838709677419355,
+        "log_loss": 1.0517933476414534,
+        "brier": 0.6322723039924487,
+        "rps": 0.22119456816967056,
+        "ece": 0.029333696620304522
+      }
+    },
+    "salary_cap_roster_tier": {
+      "unknown": {
+        "samples": 775,
+        "accuracy": 0.4838709677419355,
+        "log_loss": 1.0517933476414534,
+        "brier": 0.6322723039924487,
+        "rps": 0.22119456816967056,
+        "ece": 0.029333696620304522
+      }
+    }
+  },
+  "expansion_holdout": {
+    "status": "measured",
+    "samples": 55,
+    "accuracy": 0.4727272727272727,
+    "log_loss": 1.0620324196208317,
+    "brier": 0.6402618942842958,
+    "rps": 0.23830697153153507,
+    "ece": 0.11121049384947068
+  },
+  "deployment": {
+    "temperature": 1.2693799940390262,
+    "conformal_quantile": 0.7754362813082837,
+    "trained_through": "2026-09-06T00:00:00",
+    "selected_candidate": "elo",
+    "eligible": false,
+    "reason": "Governed model does not beat rolling Elo on both aggregate log loss and Brier score; model picks remain disabled."
+  },
+  "release_gate": {
+    "passed": false,
+    "untouched_season": false,
+    "frozen_selections": 0,
+    "market_relative_brier": null,
+    "market_relative_log_loss": null,
+    "median_clv": null,
+    "ledger_complete": false,
+    "reasons": [
+      "No full untouched season has been evaluated.",
+      "Fewer than 300 frozen selections are settled.",
+      "Market-relative Brier/log-loss evidence is missing.",
+      "Closing-line value is missing.",
+      "The timestamped selection ledger is incomplete."
+    ]
+  }
+}
