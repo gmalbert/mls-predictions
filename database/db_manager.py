@@ -13,9 +13,10 @@ Usage:
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -111,8 +112,84 @@ class DatabaseManager:
                     best_draw_odds REAL,
                     best_away_odds REAL
                 );
+
+                CREATE TABLE IF NOT EXISTS market_odds_snapshots (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fixture_id      TEXT NOT NULL,
+                    snapshot_at     TEXT NOT NULL,
+                    is_closing      INTEGER DEFAULT 0,
+                    book            TEXT NOT NULL,
+                    market          TEXT NOT NULL,
+                    selection       TEXT NOT NULL,
+                    line            REAL,
+                    american_odds   REAL,
+                    decimal_odds    REAL,
+                    limit_amount    REAL,
+                    available_at    TEXT NOT NULL,
+                    UNIQUE(fixture_id, snapshot_at, book, market, selection, line)
+                );
+                CREATE INDEX IF NOT EXISTS idx_market_odds_fixture
+                    ON market_odds_snapshots(fixture_id, market, snapshot_at);
+
+                CREATE TABLE IF NOT EXISTS prediction_snapshots (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fixture_id       TEXT NOT NULL,
+                    prediction_time  TEXT NOT NULL,
+                    lineup_scenario  TEXT NOT NULL,
+                    probabilities    TEXT NOT NULL,
+                    data_manifest    TEXT NOT NULL,
+                    model_version    TEXT NOT NULL,
+                    uncertainty      REAL DEFAULT 0,
+                    abstain           INTEGER DEFAULT 0,
+                    explanations     TEXT,
+                    UNIQUE(fixture_id, prediction_time, lineup_scenario, model_version)
+                );
+                CREATE INDEX IF NOT EXISTS idx_prediction_snapshot_fixture
+                    ON prediction_snapshots(fixture_id, prediction_time);
+
+                CREATE TABLE IF NOT EXISTS bet_ledger (
+                    selection_id      TEXT PRIMARY KEY,
+                    fixture_id        TEXT NOT NULL,
+                    match_date        TEXT,
+                    home_team         TEXT,
+                    away_team         TEXT,
+                    selection_time    TEXT NOT NULL,
+                    prediction_time   TEXT NOT NULL,
+                    book              TEXT NOT NULL,
+                    market            TEXT NOT NULL,
+                    selection         TEXT NOT NULL,
+                    line              REAL,
+                    odds              REAL NOT NULL,
+                    limits            REAL,
+                    model_probability REAL NOT NULL,
+                    market_probability REAL,
+                    edge              REAL,
+                    stake_units       REAL NOT NULL,
+                    mode              TEXT NOT NULL,
+                    code_version      TEXT NOT NULL,
+                    data_manifest     TEXT NOT NULL,
+                    closing_odds      REAL,
+                    clv               REAL,
+                    result            TEXT,
+                    settlement        TEXT,
+                    profit_units      REAL,
+                    settled_at        TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_bet_ledger_fixture
+                    ON bet_ledger(fixture_id, selection_time);
                 """
             )
+            # Additive migrations keep existing user databases compatible.
+            existing_ledger_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(bet_ledger)").fetchall()
+            }
+            for column, definition in {
+                "match_date": "TEXT",
+                "home_team": "TEXT",
+                "away_team": "TEXT",
+            }.items():
+                if column not in existing_ledger_columns:
+                    conn.execute(f"ALTER TABLE bet_ledger ADD COLUMN {column} {definition}")
 
     # ── Match queries ──────────────────────────────────────────────────────────
 
@@ -269,7 +346,7 @@ class DatabaseManager:
 
     def store_odds_snapshot(self, fixtures_df: pd.DataFrame) -> None:
         """Persist current odds for all fixtures (line-movement tracking)."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         rows = []
         for _, row in fixtures_df.iterrows():
             rows.append(
@@ -302,6 +379,124 @@ class DatabaseManager:
         """
         with self._connect() as conn:
             return pd.read_sql_query(sql, conn, params=[home_team, away_team])
+
+    def store_market_odds(self, records: pd.DataFrame) -> int:
+        """Archive timestamped 1X2, handicap, totals, and team-total prices."""
+        required = {"fixture_id", "snapshot_at", "book", "market", "selection", "available_at"}
+        missing = required.difference(records.columns)
+        if missing:
+            raise ValueError(f"Missing market-odds columns: {sorted(missing)}")
+        if pd.to_datetime(records["available_at"], errors="coerce", utc=True).isna().any():
+            raise ValueError("Every market-odds row requires a valid available_at timestamp.")
+        sql = """
+            INSERT OR IGNORE INTO market_odds_snapshots
+                (fixture_id, snapshot_at, is_closing, book, market, selection, line,
+                 american_odds, decimal_odds, limit_amount, available_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        rows = [
+            (
+                str(row.get("fixture_id")), str(row.get("snapshot_at")), int(bool(row.get("is_closing", False))),
+                str(row.get("book")), str(row.get("market")), str(row.get("selection")), row.get("line"),
+                row.get("american_odds"), row.get("decimal_odds"), row.get("limit_amount"), str(row.get("available_at")),
+            )
+            for _, row in records.iterrows()
+        ]
+        with self._connect() as conn:
+            before = conn.total_changes
+            conn.executemany(sql, rows)
+            return int(conn.total_changes - before)
+
+    def get_market_odds(self, fixture_id: str, market: str | None = None) -> pd.DataFrame:
+        sql = "SELECT * FROM market_odds_snapshots WHERE fixture_id = ?"
+        params: list = [fixture_id]
+        if market:
+            sql += " AND market = ?"
+            params.append(market)
+        sql += " ORDER BY snapshot_at, book, selection"
+        with self._connect() as conn:
+            return pd.read_sql_query(sql, conn, params=params)
+
+    def store_prediction_snapshot(self, snapshot: object) -> None:
+        """Persist a :class:`models.governance.Snapshot` or equivalent record."""
+        record = snapshot.to_record() if hasattr(snapshot, "to_record") else dict(snapshot)
+        sql = """
+            INSERT OR IGNORE INTO prediction_snapshots
+                (fixture_id, prediction_time, lineup_scenario, probabilities,
+                 data_manifest, model_version, uncertainty, abstain, explanations)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        with self._connect() as conn:
+            conn.execute(
+                sql,
+                [
+                    record["fixture_id"], record["prediction_time"], record.get("lineup_scenario", "projected"),
+                    json.dumps(record["probabilities"], sort_keys=True), record["data_manifest"],
+                    record["model_version"], record.get("uncertainty", 0.0), int(bool(record.get("abstain", False))),
+                    json.dumps(record.get("explanations", [])),
+                ],
+            )
+
+    def get_prediction_snapshots(self, fixture_id: str) -> pd.DataFrame:
+        with self._connect() as conn:
+            frame = pd.read_sql_query(
+                "SELECT * FROM prediction_snapshots WHERE fixture_id = ? ORDER BY prediction_time",
+                conn,
+                params=[fixture_id],
+            )
+        if not frame.empty:
+            frame["probabilities"] = frame["probabilities"].map(json.loads)
+            frame["explanations"] = frame["explanations"].fillna("[]").map(json.loads)
+        return frame
+
+    def freeze_selection(self, record: dict) -> None:
+        """Freeze a paper/released selection with its contemporaneous metadata."""
+        required = {
+            "selection_id", "fixture_id", "selection_time", "prediction_time", "book", "market",
+            "selection", "odds", "model_probability", "stake_units", "mode", "code_version", "data_manifest",
+        }
+        missing = required.difference(record)
+        if missing:
+            raise ValueError(f"Missing ledger fields: {sorted(missing)}")
+        columns = [
+            "selection_id", "fixture_id", "match_date", "home_team", "away_team",
+            "selection_time", "prediction_time", "book", "market", "selection",
+            "line", "odds", "limits", "model_probability", "market_probability", "edge", "stake_units", "mode",
+            "code_version", "data_manifest",
+        ]
+        placeholders = ", ".join("?" for _ in columns)
+        with self._connect() as conn:
+            conn.execute(
+                f"INSERT INTO bet_ledger ({', '.join(columns)}) VALUES ({placeholders})",
+                [record.get(column) for column in columns],
+            )
+
+    def settle_selection(
+        self,
+        selection_id: str,
+        result: str,
+        settlement: str,
+        profit_units: float,
+        closing_odds: float | None = None,
+        clv: float | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE bet_ledger
+                SET result = ?, settlement = ?, profit_units = ?, closing_odds = ?, clv = ?, settled_at = ?
+                WHERE selection_id = ?
+                """,
+                [result, settlement, profit_units, closing_odds, clv, datetime.now(timezone.utc).isoformat(), selection_id],
+            )
+
+    def get_bet_ledger(self, settled_only: bool = False) -> pd.DataFrame:
+        sql = "SELECT * FROM bet_ledger"
+        if settled_only:
+            sql += " WHERE settled_at IS NOT NULL"
+        sql += " ORDER BY selection_time"
+        with self._connect() as conn:
+            return pd.read_sql_query(sql, conn)
 
     # ── CSV migration ──────────────────────────────────────────────────────────
 

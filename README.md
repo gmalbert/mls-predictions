@@ -172,21 +172,38 @@ mls-predictions/
 
 ---
 
-## Roadmap
+## Frontier model, analytics, and governance
 
-**Primary model targets:** Moneyline (1X2), over/under 2.5 goals, both teams to score, MLS Cup futures.
+The roadmap is implemented as a second, reproducible path alongside the original
+five-tab application:
 
-**Planned additions:**
-- Nightly data pipeline (fixtures, results, injuries from MLS API)
-- Designated player availability tracker (near-real-time injury/availability flags)
-- Playoff race context feature (dynamic per round)
-- Poisson regression for expected goals scoring
-- Conference-specific sub-models (separate Eastern/Western training)
-- Historical backtesting dashboard (2017–2024, ~1,750 games)
-- DraftKings odds integration via The Odds API
-- PDF report export
+- `models/frontier_features.py` builds strictly point-in-time MLS features for ASA
+  xG/xGOT/g+, travel, roster mechanisms, coaching, set pieces, weather, draft,
+  transfer, attendance, lineup, referee, and competition context.
+- `models/backtesting.py` compares recency-weighted multinomial logistic, rolling
+  Elo, Dixon–Coles, home-field, and de-vigged market baselines by season and segment.
+- `models/governance.py` owns score-market consistency, conformal abstention,
+  paper/live decisions, settlement, and the fail-closed release gate.
+- `pages/8_Frontier_Analytics.py` exposes match cards, team profiles, value tools,
+  playoff simulation, historical analysis, scenarios, event shape, and special models.
+- `automation/refresh_context.py`, `automation/retrain_model.py`, and
+  `automation/matchday_email.py` power the scheduled refresh/retrain/Friday workflow.
 
-See [docs/mls.md](docs/mls.md) for the full model design and feature engineering plan.
+Run a complete local rebuild and evaluation with:
+
+```powershell
+python prepare_model_data.py
+python scripts/run_backtest.py
+python scripts/generate_picks.py
+streamlit run predictions.py
+```
+
+Live staking remains disabled until the report proves one full untouched season,
+300 settled frozen selections, superiority to the closing market on Brier and log
+loss, positive median CLV, and a complete auditable ledger. Missing provider feeds
+remain explicit missingness/uncertainty—they are never interpreted as healthy or
+zero impact. See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for
+the complete requirement mapping and operating contract.
 
 [Back to top](#mls-predictor)
 

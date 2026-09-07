@@ -35,12 +35,23 @@ except ImportError:
 # ── Core helpers ──────────────────────────────────────────────────────────────
 
 
+def _named_fitted_estimators(model):
+    """Yield (name, estimator) pairs across scikit-learn VotingClassifier versions."""
+    named = getattr(model, "named_estimators_", None)
+    if named is not None:
+        return list(named.items())
+    fitted = list(getattr(model, "estimators_", []))
+    configured = list(getattr(model, "estimators", []))
+    if configured and fitted and isinstance(configured[0], tuple):
+        return [(str(configured[index][0]), estimator) for index, estimator in enumerate(fitted)]
+    return [(f"estimator_{index}", estimator) for index, estimator in enumerate(fitted)]
+
+
 def _get_xgb_estimator(model):
     """Extract the XGBoost sub-estimator from a VotingClassifier."""
-    if hasattr(model, "estimators_"):
-        for name, est in model.estimators_:
-            if "xgb" in name.lower():
-                return est
+    for name, estimator in _named_fitted_estimators(model):
+        if "xgb" in name.lower() or estimator.__class__.__name__.lower().startswith("xgb"):
+            return estimator
     return None
 
 
@@ -63,7 +74,7 @@ def compute_feature_importance(
     # Fall back to any tree estimator with feature_importances_
     if importances is None and hasattr(model, "estimators_"):
         arrays = []
-        for _, est in model.estimators_:
+        for _, est in _named_fitted_estimators(model):
             if hasattr(est, "feature_importances_"):
                 arrays.append(est.feature_importances_)
         if arrays:

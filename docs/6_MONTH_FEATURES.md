@@ -1,5 +1,10 @@
 # MLS Predictor — 6-Month Feature Roadmap
 
+> **Implementation audit — 2026-08-24:** All listed interface, analytics, and
+> automation paths are implemented. The value finder is paper-only while the
+> release gate is closed; DP, odds, and playoff-odds output depends on configured
+> source data. Automation still needs an end-to-end run in the project environment.
+
 ## Month 1: Match Day
 
 - **Today's slate** — All MLS matches today with model win probabilities, O/U prediction, and venue surface indicator.
